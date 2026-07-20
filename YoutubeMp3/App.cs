@@ -29,6 +29,7 @@ public class App : Application
         AppServices.Current = _host.Services;
 
         var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
+        mainWindow.Width = 1000;
         mainWindow.Height = 300;
         mainWindow.Show();
     }
@@ -42,7 +43,9 @@ public class App : Application
     private void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IYoutubeService, YoutubeService>();
+        services.AddSingleton<IAudioGainService, AudioGainService>();
         services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<PlayerViewModel>();
         services.AddSingleton<MainWindow>();
     }
 }

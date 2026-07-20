@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using YoutubeMp3.Main.Services;
 
 namespace YoutubeMp3.Forms.ViewModels;
@@ -10,13 +11,81 @@ namespace YoutubeMp3.Forms.ViewModels;
 public partial class MainWindowViewModel : ObservableObject
 {
     private readonly IYoutubeService _youtubeService;
+    private readonly IAudioGainService _audioGainService;
 
-    public MainWindowViewModel(IYoutubeService youtubeService)
+    public MainWindowViewModel(IYoutubeService youtubeService, IAudioGainService audioGainService)
     {
         _youtubeService = youtubeService;
+        _audioGainService = audioGainService;
+    }
+
+    /// <summary>
+    /// 창 로드 시 호출. FFmpeg 등 필수 실행 파일이 없으면 백그라운드에서 자동 설치한다.
+    /// FFmpeg가 없으면 다운로드·볼륨 조절 모두 불가하므로 시작하자마자 준비해 둔다.
+    /// </summary>
+    public async Task InitializeAsync()
+    {
+        var downloadStarted = false;
+        try
+        {
+            var progress = new Progress<AudioDownloadProgress>(p =>
+            {
+                downloadStarted = true;
+                Status = p.Status;
+            });
+            await _youtubeService.PrepareBinariesAsync(progress);
+
+            // 실제로 내려받은 경우에만 상태 문구를 마무리한다(이미 있으면 조용히 넘어간다).
+            if (downloadStarted)
+                Status = "준비 완료";
+        }
+        catch (Exception ex)
+        {
+            Status = $"필수 프로그램 준비 실패: {ex.Message}";
+        }
     }
 
     public ObservableCollection<VideoSearchResult> SearchResults { get; } = new();
+
+    // ── 페이지 전환 (LazyRegion) ──────────────────────────────────
+
+    // 뷰 계층이 주입하는 페이지들. VM이 View 타입에 직접 의존하지 않도록 object로 보관한다.
+    private object? _extractionPage;
+    private object? _volumePage;
+    private object? _playerPage;
+
+    // LazyRegion에 표시할 현재 페이지. 값이 바뀌면 애니메이션으로 전환된다.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsExtractionActive))]
+    [NotifyPropertyChangedFor(nameof(IsVolumeActive))]
+    [NotifyPropertyChangedFor(nameof(IsPlayerActive))]
+    private object? _currentPage;
+
+    // 타이틀바 버튼에서 지금 보고 있는 화면을 강조하는 데 쓴다.
+    public bool IsExtractionActive => ReferenceEquals(CurrentPage, _extractionPage);
+    public bool IsVolumeActive => ReferenceEquals(CurrentPage, _volumePage);
+    public bool IsPlayerActive => ReferenceEquals(CurrentPage, _playerPage);
+
+    /// <summary>뷰가 만든 페이지들을 받아 초기 화면(추출)을 세팅한다.</summary>
+    public void InitializePages(object extractionPage, object volumePage, object playerPage)
+    {
+        _extractionPage = extractionPage;
+        _volumePage = volumePage;
+        _playerPage = playerPage;
+        CurrentPage = _extractionPage;
+    }
+
+    /// <summary>Youtube Mp3 추출 화면으로 이동한다.</summary>
+    [RelayCommand]
+    private void ShowExtraction() => CurrentPage = _extractionPage;
+
+    /// <summary>데시벨 조정 화면으로 이동한다.</summary>
+    [RelayCommand]
+    private void ShowVolume() => CurrentPage = _volumePage;
+
+    /// <summary>플레이어 화면으로 이동한다.</summary>
+    [RelayCommand]
+    private void ShowPlayer() => CurrentPage = _playerPage;
 
     [ObservableProperty]
     private string _searchQuery = string.Empty;
@@ -117,6 +186,82 @@ public partial class MainWindowViewModel : ObservableObject
         {
             UseShellExecute = true,
         });
+    }
+
+    // ── MP3 볼륨(dB) 조절 ────────────────────────────────────────
+
+    // 볼륨을 조절할 mp3 경로. 비어 있으면 증가/감소 버튼이 비활성.
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(VolumeUpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(VolumeDownCommand))]
+    private string _volumeFilePath = string.Empty;
+
+    // 표시용 파일명.
+    [ObservableProperty]
+    private string _volumeFileName = "(파일 없음)";
+
+    // 증가/감소할 데시벨 양. 기본 3.
+    [ObservableProperty]
+    private double _volumeDb = 3;
+
+    // 조절 중 여부(재진입 방지·버튼 비활성).
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(VolumeUpCommand))]
+    [NotifyCanExecuteChangedFor(nameof(VolumeDownCommand))]
+    private bool _isAdjustingVolume;
+
+    /// <summary>볼륨을 조절할 mp3 파일을 고른다.</summary>
+    [RelayCommand]
+    private void OpenVolumeFile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "MP3 파일 열기",
+            Filter = "MP3 오디오 (*.mp3)|*.mp3",
+        };
+
+        // 다운로드 폴더가 있으면 거기서 시작한다.
+        var musicDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "YoutubeMp3");
+        if (Directory.Exists(musicDirectory))
+            dialog.InitialDirectory = musicDirectory;
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        VolumeFilePath = dialog.FileName;
+        VolumeFileName = Path.GetFileName(dialog.FileName);
+        Status = $"볼륨 조절 대상: {VolumeFileName}";
+    }
+
+    private bool CanAdjustVolume() => !IsAdjustingVolume && File.Exists(VolumeFilePath);
+
+    /// <summary>지정한 dB만큼 볼륨을 키워 새 mp3로 저장한다.</summary>
+    [RelayCommand(CanExecute = nameof(CanAdjustVolume))]
+    private Task VolumeUpAsync() => AdjustVolumeAsync(VolumeDb);
+
+    /// <summary>지정한 dB만큼 볼륨을 줄여 새 mp3로 저장한다.</summary>
+    [RelayCommand(CanExecute = nameof(CanAdjustVolume))]
+    private Task VolumeDownAsync() => AdjustVolumeAsync(-VolumeDb);
+
+    private async Task AdjustVolumeAsync(double gainDb)
+    {
+        IsAdjustingVolume = true;
+        Status = "볼륨 조절 중...";
+        try
+        {
+            var outputPath = await _audioGainService.AdjustGainAsync(VolumeFilePath, gainDb);
+            Status = $"완료: {Path.GetFileName(outputPath)} ({gainDb:+0.#;-0.#}dB)";
+            LastDownloadedFilePath = outputPath; // '폴더 열기'로 결과 파일을 바로 확인
+        }
+        catch (Exception ex)
+        {
+            Status = $"오류: {ex.Message}";
+        }
+        finally
+        {
+            IsAdjustingVolume = false;
+        }
     }
 
     partial void OnSearchQueryChanged(string value) => SearchCommand.NotifyCanExecuteChanged();

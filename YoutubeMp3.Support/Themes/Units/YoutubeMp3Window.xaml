@@ -36,6 +36,11 @@
                                     FontSize="13"
                                     Foreground="#CCCCCC"
                                     Text="{TemplateBinding Title}" />
+                                <!--  앱별 타이틀바 콘텐츠(가운데)  -->
+                                <ContentPresenter
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding TitleBarContent}" />
                                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                                     <!--  Minimize  -->
                                     <units:MinimizeButton x:Name="PART_MinimizeButton" />

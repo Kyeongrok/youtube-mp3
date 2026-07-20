@@ -1,0 +1,223 @@
+<UserControl
+    x:Class="YoutubeMp3.Forms.UI.Views.PlayerView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/YoutubeMp3.Forms;component/Themes/SharedStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid
+        AllowDrop="True"
+        Background="Transparent"
+        DragOver="OnDragOver"
+        Drop="OnDrop">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  재생 중(상단): 현재 곡 이름 + 시간  -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+                Grid.Column="0"
+                VerticalAlignment="Center"
+                FontSize="14"
+                FontWeight="SemiBold"
+                Foreground="#4CC2FF"
+                Text="{Binding CurrentName}"
+                TextTrimming="CharacterEllipsis" />
+            <TextBlock
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                FontSize="12"
+                Foreground="#AAAAAA">
+                <Run Text="{Binding PositionText, Mode=OneWay}" />
+                <Run Text=" / " />
+                <Run Text="{Binding DurationText, Mode=OneWay}" />
+            </TextBlock>
+        </Grid>
+
+        <!--  재생 진행바: 클릭/드래그로 해당 위치부터 재생  -->
+        <Slider
+            x:Name="ProgressSlider"
+            Grid.Row="1"
+            Margin="0,8,0,0"
+            VerticalAlignment="Center"
+            IsMoveToPointEnabled="True"
+            LargeChange="10"
+            Maximum="{Binding DurationSeconds}"
+            Minimum="0"
+            PreviewMouseLeftButtonDown="OnSeekStart"
+            PreviewMouseLeftButtonUp="OnSeekEnd"
+            SmallChange="1"
+            Value="{Binding PositionSeconds, Mode=TwoWay}" />
+
+        <!--  재생목록  -->
+        <ListBox
+            x:Name="PlaylistBox"
+            Grid.Row="2"
+            Margin="0,12,0,0"
+            AllowDrop="True"
+            Background="#2D2D2D"
+            BorderBrush="#3C3C3C"
+            BorderThickness="1"
+            ItemsSource="{Binding Playlist}"
+            MouseDoubleClick="OnItemDoubleClick"
+            PreviewMouseLeftButtonDown="OnListPreviewMouseLeftButtonDown"
+            PreviewMouseMove="OnListPreviewMouseMove"
+            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+            SelectedItem="{Binding SelectedItem, Mode=TwoWay}">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Padding" Value="8,6" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0,0,0,1" />
+                    <Setter Property="BorderBrush" Value="#3C3C3C" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <Border
+                                    Padding="{TemplateBinding Padding}"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}">
+                                    <ContentPresenter />
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#3C3C3C" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#0078D4" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="18" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <!--  현재 재생 곡 표시(▶)  -->
+                        <TextBlock
+                            x:Name="Marker"
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            FontSize="11"
+                            Foreground="#4CC2FF"
+                            Text="▶"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            x:Name="Title"
+                            Grid.Column="1"
+                            FontSize="13"
+                            Foreground="White"
+                            Text="{Binding Name}"
+                            TextTrimming="CharacterEllipsis"
+                            ToolTip="{Binding Path}" />
+                    </Grid>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                            <Setter TargetName="Marker" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Title" Property="Foreground" Value="#4CC2FF" />
+                            <Setter TargetName="Title" Property="FontWeight" Value="SemiBold" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!--  비어 있을 때 안내(드롭 유도)  -->
+        <TextBlock
+            Grid.Row="2"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            FontSize="13"
+            Foreground="#888888"
+            IsHitTestVisible="False"
+            Text="오디오 파일을 여기로 드래그해 재생목록에 추가하세요">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasItems, ElementName=PlaylistBox}" Value="False">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+
+        <!--  재생 컨트롤  -->
+        <StackPanel
+            Grid.Row="3"
+            Margin="0,12,0,0"
+            Orientation="Horizontal">
+            <Button
+                Width="96"
+                Height="36"
+                Command="{Binding PlayPauseCommand}"
+                Content="{Binding PlayPauseLabel}"
+                Style="{StaticResource AccentButtonStyle}" />
+            <Button
+                Width="72"
+                Height="36"
+                Margin="8,0,0,0"
+                Command="{Binding StopCommand}"
+                Content="■ 정지"
+                Style="{StaticResource SecondaryButtonStyle}" />
+            <Button
+                Width="72"
+                Height="36"
+                Margin="8,0,0,0"
+                Command="{Binding PreviousCommand}"
+                Content="⏮ 이전"
+                Style="{StaticResource SecondaryButtonStyle}" />
+            <Button
+                Width="72"
+                Height="36"
+                Margin="8,0,0,0"
+                Command="{Binding NextCommand}"
+                Content="⏭ 다음"
+                Style="{StaticResource SecondaryButtonStyle}" />
+            <Button
+                Width="72"
+                Height="36"
+                Margin="16,0,0,0"
+                Command="{Binding RemoveSelectedCommand}"
+                Content="삭제"
+                Style="{StaticResource SecondaryButtonStyle}" />
+            <Button
+                Width="72"
+                Height="36"
+                Margin="8,0,0,0"
+                Command="{Binding ClearPlaylistCommand}"
+                Content="비우기"
+                Style="{StaticResource SecondaryButtonStyle}" />
+        </StackPanel>
+
+        <TextBlock
+            Grid.Row="4"
+            Margin="0,8,0,0"
+            FontSize="12"
+            Foreground="#CCCCCC"
+            Text="{Binding Status}"
+            TextWrapping="Wrap" />
+    </Grid>
+</UserControl>

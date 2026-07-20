@@ -1,0 +1,89 @@
+<UserControl
+    x:Class="YoutubeMp3.Forms.UI.Views.VolumeAdjustView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/YoutubeMp3.Forms;component/Themes/SharedStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid VerticalAlignment="Top">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  MP3 볼륨(dB) 조절: 파일 열기 → dB 지정 → 증가/감소 저장  -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="56" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button
+                Grid.Column="0"
+                Width="80"
+                Command="{Binding OpenVolumeFileCommand}"
+                Content="파일 열기"
+                Style="{StaticResource SecondaryButtonStyle}"
+                ToolTip="볼륨을 조절할 mp3 파일을 엽니다" />
+
+            <TextBlock
+                Grid.Column="1"
+                Margin="8,0,8,0"
+                VerticalAlignment="Center"
+                FontSize="12"
+                Foreground="#CCCCCC"
+                Text="{Binding VolumeFileName}"
+                TextTrimming="CharacterEllipsis"
+                ToolTip="{Binding VolumeFilePath}" />
+
+            <TextBlock
+                Grid.Column="2"
+                Margin="0,0,6,0"
+                VerticalAlignment="Center"
+                FontSize="12"
+                Foreground="#CCCCCC"
+                Text="dB" />
+
+            <TextBox
+                Grid.Column="3"
+                Style="{StaticResource DarkTextBoxStyle}"
+                Text="{Binding VolumeDb, UpdateSourceTrigger=PropertyChanged, StringFormat=0.#}"
+                ToolTip="증가/감소할 데시벨 양 (기본 3)" />
+
+            <Button
+                Grid.Column="4"
+                Width="80"
+                Margin="8,0,0,0"
+                Command="{Binding VolumeUpCommand}"
+                Content="증가 저장"
+                Style="{StaticResource AccentButtonStyle}"
+                ToolTip="지정한 dB만큼 볼륨을 키워 원본 옆에 새 mp3로 저장" />
+
+            <Button
+                Grid.Column="5"
+                Width="80"
+                Margin="8,0,0,0"
+                Command="{Binding VolumeDownCommand}"
+                Content="감소 저장"
+                Style="{StaticResource SecondaryButtonStyle}"
+                ToolTip="지정한 dB만큼 볼륨을 줄여 원본 옆에 새 mp3로 저장" />
+        </Grid>
+
+        <TextBlock
+            Grid.Row="1"
+            Margin="0,12,0,0"
+            FontSize="12"
+            Foreground="#CCCCCC"
+            Text="{Binding Status}"
+            TextWrapping="Wrap" />
+    </Grid>
+</UserControl>

@@ -20,7 +20,8 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Publish portable executable
+      # 자체 포함(self-contained): .NET 설치 없이 어디서나 실행되는 단일 exe
+      - name: Publish self-contained executable
         run: >
           dotnet publish YoutubeMp3/YoutubeMp3.csproj
           -c Release
@@ -30,11 +31,22 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true
           -o publish
 
+      # 프레임워크 종속(framework-dependent): .NET 8 데스크톱 런타임이 설치된 PC용(용량이 작음)
+      - name: Publish framework-dependent executable
+        run: >
+          dotnet publish YoutubeMp3/YoutubeMp3.csproj
+          -c Release
+          -r win-x64
+          --self-contained false
+          -p:PublishSingleFile=true
+          -o publish-fd
+
       - name: Package
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}"
           Compress-Archive -Path publish\* -DestinationPath "YoutubeMp3-$version-win-x64.zip"
+          Compress-Archive -Path publish-fd\* -DestinationPath "YoutubeMp3-$version-win-x64-framework-dependent.zip"
 
       - name: Create or update GitHub release
         shell: pwsh
@@ -42,10 +54,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "${{ github.ref_name }}"
-          $asset = "YoutubeMp3-$tag-win-x64.zip"
+          $assets = @(
+            "YoutubeMp3-$tag-win-x64.zip",
+            "YoutubeMp3-$tag-win-x64-framework-dependent.zip"
+          )
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $asset --clobber
+            gh release upload $tag $assets --clobber
           } else {
-            gh release create $tag $asset --title $tag --generate-notes
+            gh release create $tag $assets --title $tag --generate-notes
           }

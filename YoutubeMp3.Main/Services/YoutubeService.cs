@@ -28,6 +28,11 @@ public sealed class YoutubeService : IYoutubeService
         };
     }
 
+    public Task PrepareBinariesAsync(
+        IProgress<AudioDownloadProgress>? progress = null,
+        CancellationToken ct = default)
+        => EnsureBinariesAsync(progress, ct);
+
     public async Task<IReadOnlyList<VideoSearchResult>> SearchAsync(
         string query,
         int maxResults = 20,

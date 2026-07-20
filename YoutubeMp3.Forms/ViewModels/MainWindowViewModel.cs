@@ -12,11 +12,16 @@ public partial class MainWindowViewModel : ObservableObject
 {
     private readonly IYoutubeService _youtubeService;
     private readonly IAudioGainService _audioGainService;
+    private readonly PlayerViewModel _playerViewModel;
 
-    public MainWindowViewModel(IYoutubeService youtubeService, IAudioGainService audioGainService)
+    public MainWindowViewModel(
+        IYoutubeService youtubeService,
+        IAudioGainService audioGainService,
+        PlayerViewModel playerViewModel)
     {
         _youtubeService = youtubeService;
         _audioGainService = audioGainService;
+        _playerViewModel = playerViewModel;
     }
 
     /// <summary>
@@ -188,6 +193,20 @@ public partial class MainWindowViewModel : ObservableObject
         });
     }
 
+    private bool CanAddToPlaylist() => !string.IsNullOrEmpty(LastDownloadedFilePath);
+
+    /// <summary>방금 추출한 mp3를 플레이어의 재생목록에 추가하고 플레이어 화면으로 이동한다.</summary>
+    [RelayCommand(CanExecute = nameof(CanAddToPlaylist))]
+    private void AddToPlaylist()
+    {
+        if (string.IsNullOrEmpty(LastDownloadedFilePath))
+            return;
+
+        _playerViewModel.AddFiles(new[] { LastDownloadedFilePath });
+        Status = $"재생목록에 추가: {Path.GetFileName(LastDownloadedFilePath)}";
+        ShowPlayer();
+    }
+
     // ── MP3 볼륨(dB) 조절 ────────────────────────────────────────
 
     // 볼륨을 조절할 mp3 경로. 비어 있으면 증가/감소 버튼이 비활성.
@@ -229,8 +248,28 @@ public partial class MainWindowViewModel : ObservableObject
         if (dialog.ShowDialog() != true)
             return;
 
-        VolumeFilePath = dialog.FileName;
-        VolumeFileName = Path.GetFileName(dialog.FileName);
+        SetVolumeFile(dialog.FileName);
+    }
+
+    /// <summary>드롭된 경로들 중 첫 mp3 파일을 볼륨 조절 대상으로 지정한다.</summary>
+    public void SetVolumeFiles(IEnumerable<string> paths)
+    {
+        var mp3 = paths.FirstOrDefault(p =>
+            File.Exists(p) && Path.GetExtension(p).Equals(".mp3", StringComparison.OrdinalIgnoreCase));
+
+        if (mp3 is null)
+        {
+            Status = "mp3 파일만 볼륨 조절이 가능합니다";
+            return;
+        }
+
+        SetVolumeFile(mp3);
+    }
+
+    private void SetVolumeFile(string path)
+    {
+        VolumeFilePath = path;
+        VolumeFileName = Path.GetFileName(path);
         Status = $"볼륨 조절 대상: {VolumeFileName}";
     }
 
@@ -280,5 +319,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnIsDownloadingChanged(bool value) => DownloadCommand.NotifyCanExecuteChanged();
 
-    partial void OnLastDownloadedFilePathChanged(string? value) => OpenFolderCommand.NotifyCanExecuteChanged();
+    partial void OnLastDownloadedFilePathChanged(string? value)
+    {
+        OpenFolderCommand.NotifyCanExecuteChanged();
+        AddToPlaylistCommand.NotifyCanExecuteChanged();
+    }
 }

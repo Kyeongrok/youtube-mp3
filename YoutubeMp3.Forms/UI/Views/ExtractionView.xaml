@@ -161,11 +161,12 @@
             </TextBlock.Style>
         </TextBlock>
 
-        <!--  URL 입력  -->
+        <!--  URL 입력 + 추출 버튼(입력 필드 바로 오른쪽)  -->
         <Grid Grid.Row="2" Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock
                 Grid.Column="0"
@@ -178,6 +179,13 @@
                 Grid.Column="1"
                 Style="{StaticResource DarkTextBoxStyle}"
                 Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}" />
+            <Button
+                Grid.Column="2"
+                Width="100"
+                Margin="8,0,0,0"
+                Command="{Binding DownloadCommand}"
+                Content="MP3 추출"
+                Style="{StaticResource AccentButtonStyle}" />
         </Grid>
 
         <StackPanel
@@ -185,10 +193,10 @@
             Margin="0,12,0,0"
             Orientation="Horizontal">
             <Button
-                Width="120"
+                Width="140"
                 Height="40"
-                Command="{Binding DownloadCommand}"
-                Content="MP3 추출"
+                Command="{Binding AddToPlaylistCommand}"
+                Content="재생목록에 추가"
                 FontSize="14"
                 Style="{StaticResource AccentButtonStyle}" />
 

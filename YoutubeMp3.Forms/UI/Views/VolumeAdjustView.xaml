@@ -10,10 +10,16 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <Grid VerticalAlignment="Top">
+    <!--  탐색기에서 mp3를 끌어다 놓으면 볼륨 조절 대상으로 지정된다  -->
+    <Grid
+        AllowDrop="True"
+        Background="Transparent"
+        DragOver="OnDragOver"
+        Drop="OnDrop">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!--  MP3 볼륨(dB) 조절: 파일 열기 → dB 지정 → 증가/감소 저장  -->
@@ -85,5 +91,14 @@
             Foreground="#CCCCCC"
             Text="{Binding Status}"
             TextWrapping="Wrap" />
+
+        <TextBlock
+            Grid.Row="2"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            FontSize="13"
+            Foreground="#888888"
+            IsHitTestVisible="False"
+            Text="mp3 파일을 여기로 드래그해 볼륨 조절 대상으로 지정하세요" />
     </Grid>
 </UserControl>

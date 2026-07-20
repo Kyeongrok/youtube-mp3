@@ -1,0 +1,8 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/YoutubeMp3.Support;component/Themes/Units/YoutubeMp3Window.xaml" />
+        <ResourceDictionary Source="/YoutubeMp3.Support;component/Themes/Units/MinimizeButton.xaml" />
+        <ResourceDictionary Source="/YoutubeMp3.Support;component/Themes/Units/MaximizeButton.xaml" />
+        <ResourceDictionary Source="/YoutubeMp3.Support;component/Themes/Units/CloseButton.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

@@ -1,0 +1,15 @@
+# Build results
+bin/
+obj/
+publish/
+
+# Visual Studio / Rider / JetBrains
+.vs/
+.idea/
+*.user
+*.suo
+
+# yt-dlp / FFmpeg / Deno binaries are downloaded at runtime, never committed
+yt-dlp.exe
+ffmpeg.exe
+deno.exe

@@ -153,6 +153,29 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string _selectedAudioQuality = "192K";
 
+    // 브라우저에서 직접 쿠키를 읽는 방식(--cookies-from-browser)은 최신 Windows 크로미움 브라우저에서
+    // DB 잠금·DPAPI 복호화 문제로 거의 항상 실패해 빼고, 내보낸 쿠키 파일만 지원한다.
+    [ObservableProperty]
+    private string _cookieFileDisplay = string.Empty;
+
+    /// <summary>"Sign in to confirm you're not a bot" 오류가 뜨면, 브라우저 확장 프로그램으로
+    /// 내보낸 cookies.txt를 지정해 우회한다.</summary>
+    [RelayCommand]
+    private void SelectCookieFile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "쿠키 파일 선택 (브라우저 확장 프로그램으로 내보낸 cookies.txt)",
+            Filter = "쿠키 파일 (*.txt)|*.txt|모든 파일 (*.*)|*.*",
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _youtubeService.SetCookieFile(dialog.FileName);
+        CookieFileDisplay = $"파일: {Path.GetFileName(dialog.FileName)}";
+    }
+
     [ObservableProperty]
     private string _status = string.Empty;
 

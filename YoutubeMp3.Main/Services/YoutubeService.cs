@@ -11,6 +11,7 @@ public sealed class YoutubeService : IYoutubeService
     private readonly string _binaryDirectory;
     private readonly SemaphoreSlim _binaryPreparationLock = new(1, 1);
     private bool _binariesReady;
+    private string? _cookieFile;
 
     public YoutubeService()
     {
@@ -27,6 +28,9 @@ public sealed class YoutubeService : IYoutubeService
             RestrictFilenames = true,
         };
     }
+
+    public void SetCookieFile(string? path) =>
+        _cookieFile = string.IsNullOrWhiteSpace(path) ? null : path;
 
     public Task PrepareBinariesAsync(
         IProgress<AudioDownloadProgress>? progress = null,
@@ -90,10 +94,21 @@ public sealed class YoutubeService : IYoutubeService
     // Note: this must not end in a trailing backslash - YoutubeDLSharp wraps the value in
     // double quotes verbatim, and a trailing "\" escapes that closing quote on Windows,
     // corrupting every argument that follows it on the command line.
-    private OptionSet CreateJsRuntimeOptions() => new()
+    private OptionSet CreateJsRuntimeOptions()
     {
-        JsRuntimes = new MultiValue<string>(new[] { $"deno:{Path.Combine(_binaryDirectory, "deno.exe")}" }),
-    };
+        var options = new OptionSet
+        {
+            JsRuntimes = new MultiValue<string>(new[] { $"deno:{Path.Combine(_binaryDirectory, "deno.exe")}" }),
+        };
+
+        // "Sign in to confirm you're not a bot" 오류 대응: 내보낸 쿠키 파일을 실어 보낸다.
+        // --cookies-from-browser(브라우저 DB 직접 복사)는 최신 Windows 브라우저에서 DB 잠금·
+        // DPAPI 복호화 문제로 거의 항상 실패해 지원하지 않는다.
+        if (_cookieFile is not null)
+            options.Cookies = _cookieFile;
+
+        return options;
+    }
 
     private async Task EnsureBinariesAsync(IProgress<AudioDownloadProgress>? progress, CancellationToken ct)
     {

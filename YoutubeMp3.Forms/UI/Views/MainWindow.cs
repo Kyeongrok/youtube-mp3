@@ -20,6 +20,11 @@ public class MainWindow : YoutubeMp3Window
     {
         DataContext = viewModel;
 
+        // 타이틀바에 릴리즈 버전을 표시한다(YoutubeMp3.csproj의 <Version>).
+        var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version;
+        if (version is not null)
+            Title = $"YoutubeMp3 v{version.ToString(3)}";
+
         // LazyRegion으로 전환할 페이지들을 만들어 넘긴다.
         // 추출·데시벨 화면은 이 창의 DataContext(MainWindowViewModel)를 상속하고,
         // 플레이어·전송 화면은 각자 자체 ViewModel을 DataContext로 쓴다(페이지 전환과 무관하게 상태 유지).

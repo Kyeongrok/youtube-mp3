@@ -19,6 +19,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!--  Search  -->
@@ -221,8 +222,35 @@
                 Style="{StaticResource AccentButtonStyle}" />
         </Grid>
 
+        <!--  "Sign in to confirm you're not a bot" 오류가 뜰 때만 내보낸 쿠키 파일을 지정한다  -->
         <StackPanel
             Grid.Row="4"
+            Margin="0,8,0,0"
+            Orientation="Horizontal"
+            ToolTip="추출 시 'Sign in to confirm you're not a bot' 오류가 뜨면, 브라우저 확장 프로그램으로 내보낸 cookies.txt를 지정하세요">
+            <TextBlock
+                VerticalAlignment="Center"
+                FontSize="11"
+                Foreground="#888888"
+                Text="봇 인증 오류 시 사용할 쿠키" />
+            <Button
+                Width="90"
+                Height="28"
+                Margin="8,0,0,0"
+                Command="{Binding SelectCookieFileCommand}"
+                Content="쿠키 파일..."
+                FontSize="11"
+                Style="{StaticResource SecondaryButtonStyle}" />
+            <TextBlock
+                Margin="8,0,0,0"
+                VerticalAlignment="Center"
+                FontSize="11"
+                Foreground="#4CC2FF"
+                Text="{Binding CookieFileDisplay}" />
+        </StackPanel>
+
+        <StackPanel
+            Grid.Row="5"
             Margin="0,12,0,0"
             Orientation="Horizontal">
             <Button
@@ -244,7 +272,7 @@
         </StackPanel>
 
         <ProgressBar
-            Grid.Row="5"
+            Grid.Row="6"
             Height="6"
             Margin="0,16,0,0"
             Background="#2D2D2D"
@@ -254,7 +282,7 @@
             Value="{Binding ProgressPercentage, Mode=OneWay}" />
 
         <TextBlock
-            Grid.Row="6"
+            Grid.Row="7"
             Margin="0,8,0,0"
             FontSize="12"
             Foreground="#CCCCCC"
@@ -263,7 +291,7 @@
 
         <!--  대기열에 처리 중인 항목 외에 더 있을 때만 표시  -->
         <TextBlock
-            Grid.Row="6"
+            Grid.Row="7"
             Margin="0,26,0,0"
             FontSize="11"
             Foreground="#888888"

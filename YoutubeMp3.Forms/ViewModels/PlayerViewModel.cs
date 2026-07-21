@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -374,8 +375,43 @@ public partial class PlayerViewModel : ObservableObject
         if (SelectedItem is null)
             return;
 
-        var removed = SelectedItem;
-        if (ReferenceEquals(removed, _current))
+        RemoveFromPlaylist(SelectedItem, "삭제됨");
+    }
+
+    /// <summary>선택한 곡을 재생목록에서 빼는 것뿐 아니라 디스크의 실제 파일도 지운다. 되돌릴 수 없어 먼저 확인을 받는다.</summary>
+    [RelayCommand]
+    private void DeleteSelectedFile()
+    {
+        if (SelectedItem is null)
+            return;
+
+        var item = SelectedItem;
+        var confirmed = MessageBox.Show(
+            $"'{item.Name}' 파일을 디스크에서 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다.",
+            "파일 삭제",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        if (!confirmed)
+            return;
+
+        try
+        {
+            if (File.Exists(item.Path))
+                File.Delete(item.Path);
+        }
+        catch (Exception ex)
+        {
+            Status = $"파일 삭제 실패: {ex.Message}";
+            return;
+        }
+
+        RemoveFromPlaylist(item, "파일 삭제됨");
+    }
+
+    // 재생목록에서 제거하는 공통 처리(현재 곡이면 정지 + 강조 해제 + 저장 + 상태 표시).
+    private void RemoveFromPlaylist(PlaylistItem item, string statusVerb)
+    {
+        if (ReferenceEquals(item, _current))
         {
             _player.Stop();
             IsPlaying = false;
@@ -383,9 +419,9 @@ public partial class PlayerViewModel : ObservableObject
             CurrentName = "재생 중인 곡이 없습니다";
         }
 
-        Playlist.Remove(removed);
+        Playlist.Remove(item);
         SavePlaylist();
-        Status = $"삭제됨 · 총 {Playlist.Count}곡";
+        Status = $"{statusVerb} · 총 {Playlist.Count}곡";
     }
 
     /// <summary>선택한 곡의 볼륨을 조절하러 볼륨 조절 화면으로 이동을 요청한다.</summary>

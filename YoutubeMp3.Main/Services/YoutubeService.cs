@@ -59,6 +59,7 @@ public sealed class YoutubeService : IYoutubeService
     public async Task<string> DownloadAudioAsync(
         string url,
         string outputDirectory,
+        string? audioQuality = null,
         IProgress<AudioDownloadProgress>? progress = null,
         CancellationToken ct = default)
     {
@@ -69,8 +70,14 @@ public sealed class YoutubeService : IYoutubeService
         var ytProgress = new Progress<DownloadProgress>(p =>
             progress?.Report(new AudioDownloadProgress(p.Progress * 100, DescribeState(p.State, p.DownloadSpeed, p.ETA))));
 
+        var options = CreateJsRuntimeOptions();
+        // OptionSet.AudioQuality는 byte(0~10 VBR)만 받아 "320K" 같은 고정 비트레이트를 표현할 수 없어,
+        // yt-dlp에 --audio-quality 인자를 그대로 전달하는 커스텀 옵션으로 우회한다.
+        if (!string.IsNullOrEmpty(audioQuality))
+            options.AddCustomOption("--audio-quality", audioQuality);
+
         var result = await _youtubeDl.RunAudioDownload(
-            url, AudioConversionFormat.Mp3, ct, ytProgress, overrideOptions: CreateJsRuntimeOptions());
+            url, AudioConversionFormat.Mp3, ct, ytProgress, overrideOptions: options);
 
         if (!result.Success)
             throw new InvalidOperationException(string.Join(Environment.NewLine, result.ErrorOutput));

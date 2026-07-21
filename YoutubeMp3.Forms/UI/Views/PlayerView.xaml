@@ -79,11 +79,13 @@
             PreviewMouseRightButtonDown="OnListPreviewMouseRightButtonDown"
             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
             SelectedItem="{Binding SelectedItem, Mode=TwoWay}">
-            <!--  우클릭한 곡을 대상으로 삭제/볼륨 조정을 실행한다(코드비하인드에서 먼저 선택 처리)  -->
+            <!--  우클릭한 곡을 대상으로 메뉴를 실행한다(코드비하인드에서 먼저 선택 처리)  -->
             <ListBox.ContextMenu>
                 <ContextMenu>
                     <MenuItem Command="{Binding PlacementTarget.DataContext.AdjustSelectedVolumeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="볼륨 조정" />
-                    <MenuItem Command="{Binding PlacementTarget.DataContext.RemoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="삭제" />
+                    <MenuItem Command="{Binding PlacementTarget.DataContext.RemoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="재생목록에서 제거" />
+                    <Separator />
+                    <MenuItem Command="{Binding PlacementTarget.DataContext.DeleteSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="파일 삭제(디스크에서 삭제)" />
                 </ContextMenu>
             </ListBox.ContextMenu>
             <ListBox.ItemContainerStyle>

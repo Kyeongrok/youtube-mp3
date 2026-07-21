@@ -147,6 +147,12 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string _url = string.Empty;
 
+    // MP3 추출 시 ffmpeg 오디오 비트레이트. 값을 바꿔도 이미 대기열에 들어간 항목엔 영향 없다.
+    public string[] AudioQualityOptions { get; } = { "128K", "192K", "320K" };
+
+    [ObservableProperty]
+    private string _selectedAudioQuality = "192K";
+
     [ObservableProperty]
     private string _status = string.Empty;
 
@@ -235,7 +241,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void Download()
     {
         var title = SelectedSearchResult is { } selected && selected.Url == Url ? selected.Title : Url;
-        ExtractionQueue.Add(new QueuedExtraction(Url, title));
+        ExtractionQueue.Add(new QueuedExtraction(Url, title, SelectedAudioQuality));
 
         if (!_isProcessingExtractionQueue)
             _ = ProcessExtractionQueueAsync();
@@ -266,10 +272,11 @@ public partial class MainWindowViewModel : ObservableObject
                         Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "YoutubeMp3");
                     Directory.CreateDirectory(outputDirectory);
 
-                    var filePath = await _youtubeService.DownloadAudioAsync(job.Url, outputDirectory, progress);
+                    var filePath = await _youtubeService.DownloadAudioAsync(job.Url, outputDirectory, job.AudioQuality, progress);
                     ProgressPercentage = 100;
                     Status = $"완료: {Path.GetFileName(filePath)}";
                     LastDownloadedFilePath = filePath;
+                    _playerViewModel.AddFiles(new[] { filePath });
                 }
                 catch (Exception ex)
                 {

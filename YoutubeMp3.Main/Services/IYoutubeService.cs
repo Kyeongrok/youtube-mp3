@@ -15,9 +15,11 @@ public interface IYoutubeService
         int maxResults = 20,
         CancellationToken ct = default);
 
+    /// <param name="audioQuality">ffmpeg 오디오 비트레이트(예: "128K", "192K", "320K"). null이면 yt-dlp 기본값을 쓴다.</param>
     Task<string> DownloadAudioAsync(
         string url,
         string outputDirectory,
+        string? audioQuality = null,
         IProgress<AudioDownloadProgress>? progress = null,
         CancellationToken ct = default);
 }

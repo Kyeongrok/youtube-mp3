@@ -197,9 +197,17 @@
                 Content="⏭ 다음"
                 Style="{StaticResource SecondaryButtonStyle}" />
             <Button
-                Width="72"
+                Width="120"
                 Height="36"
                 Margin="16,0,0,0"
+                Command="{Binding ToggleRepeatModeCommand}"
+                Content="{Binding RepeatModeLabel}"
+                Style="{StaticResource SecondaryButtonStyle}"
+                ToolTip="클릭할 때마다 전체 반복 → 재생 후 정지 → 한 곡 반복 → 셔플 순으로 바뀝니다" />
+            <Button
+                Width="72"
+                Height="36"
+                Margin="8,0,0,0"
                 Command="{Binding RemoveSelectedCommand}"
                 Content="삭제"
                 Style="{StaticResource SecondaryButtonStyle}" />

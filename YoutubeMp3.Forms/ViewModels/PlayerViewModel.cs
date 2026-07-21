@@ -8,6 +8,25 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace YoutubeMp3.Forms.ViewModels;
 
+/// <summary>
+/// 곡이 끝났을 때 다음에 무엇을 할지 결정하는 반복 모드.
+/// ToggleRepeatModeCommand로 이 순서대로 순환한다.
+/// </summary>
+public enum RepeatMode
+{
+    /// <summary>목록 끝에 도달하면 처음으로 돌아가 계속 재생한다(기본값).</summary>
+    RepeatAll,
+
+    /// <summary>목록을 한 번 끝까지 재생한 뒤 정지한다.</summary>
+    StopAfterList,
+
+    /// <summary>현재 곡만 반복 재생한다.</summary>
+    RepeatOne,
+
+    /// <summary>다음 곡을 무작위로 고른다.</summary>
+    Shuffle,
+}
+
 /// <summary>재생목록 한 곡. 현재 재생 곡 표시를 위해 IsCurrent를 관찰 가능하게 둔다.</summary>
 public partial class PlaylistItem : ObservableObject
 {
@@ -41,8 +60,14 @@ public partial class PlayerViewModel : ObservableObject
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "YoutubeMp3", "playlist.txt");
 
+    // 반복 모드 저장 위치: 다음 실행 때도 마지막으로 고른 모드를 그대로 사용한다.
+    private static readonly string RepeatModePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "YoutubeMp3", "repeatmode.txt");
+
     private readonly MediaPlayer _player = new();
     private readonly DispatcherTimer _timer;
+    private readonly Random _random = new();
     private PlaylistItem? _current;
     private bool _suppressSeek;
 
@@ -52,7 +77,7 @@ public partial class PlayerViewModel : ObservableObject
     public PlayerViewModel()
     {
         _player.MediaOpened += OnMediaOpened;
-        _player.MediaEnded += (_, _) => PlayNext();
+        _player.MediaEnded += (_, _) => AdvanceOnMediaEnded();
 
         // 재생 위치를 주기적으로 진행바에 반영한다.
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -60,6 +85,7 @@ public partial class PlayerViewModel : ObservableObject
         _timer.Start();
 
         LoadPlaylist();
+        LoadRepeatMode();
     }
 
     public ObservableCollection<PlaylistItem> Playlist { get; } = new();
@@ -86,11 +112,39 @@ public partial class PlayerViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(DurationText))]
     private double _durationSeconds;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RepeatModeLabel))]
+    private RepeatMode _repeatMode = RepeatMode.RepeatAll;
+
     public string PlayPauseLabel => IsPlaying ? "❚❚ 일시정지" : "▶ 재생";
 
     public string PositionText => FormatTime(PositionSeconds);
 
     public string DurationText => FormatTime(DurationSeconds);
+
+    public string RepeatModeLabel => RepeatMode switch
+    {
+        RepeatMode.RepeatAll => "🔁 전체 반복",
+        RepeatMode.StopAfterList => "➡ 재생 후 정지",
+        RepeatMode.RepeatOne => "🔂 한 곡 반복",
+        RepeatMode.Shuffle => "🔀 셔플",
+        _ => string.Empty,
+    };
+
+    /// <summary>버튼을 누를 때마다 전체반복 → 후정지 → 한곡반복 → 셔플 순으로 순환한다.</summary>
+    [RelayCommand]
+    private void ToggleRepeatMode()
+    {
+        RepeatMode = RepeatMode switch
+        {
+            RepeatMode.RepeatAll => RepeatMode.StopAfterList,
+            RepeatMode.StopAfterList => RepeatMode.RepeatOne,
+            RepeatMode.RepeatOne => RepeatMode.Shuffle,
+            RepeatMode.Shuffle => RepeatMode.RepeatAll,
+            _ => RepeatMode.RepeatAll,
+        };
+        SaveRepeatMode();
+    }
 
     private static string FormatTime(double seconds)
     {
@@ -228,33 +282,86 @@ public partial class PlayerViewModel : ObservableObject
             Status = $"정지 · {_current.Name}";
     }
 
+    // 수동 '다음'은 셔플 모드에서는 무작위로, 그 외에는 목록 순서대로 넘어간다(끝이면 처음으로).
     [RelayCommand]
-    private void Next() => PlayNext();
-
-    [RelayCommand]
-    private void Previous()
+    private void Next()
     {
-        if (Playlist.Count == 0)
-            return;
-        var idx = _current is null ? -1 : Playlist.IndexOf(_current);
-        var prev = idx <= 0 ? Playlist.Count - 1 : idx - 1;
-        PlayItem(Playlist[prev]);
+        if (RepeatMode == RepeatMode.Shuffle)
+            PlayRandom();
+        else
+            PlaySequential(+1, wrap: true);
     }
 
-    private void PlayNext()
+    // 수동 '이전'은 반복 모드와 무관하게 항상 목록 순서를 따른다.
+    [RelayCommand]
+    private void Previous() => PlaySequential(-1, wrap: true);
+
+    /// <summary>곡이 끝까지 재생되었을 때(자동) 반복 모드에 따라 다음 동작을 결정한다.</summary>
+    private void AdvanceOnMediaEnded()
     {
         if (Playlist.Count == 0)
             return;
-        var idx = _current is null ? -1 : Playlist.IndexOf(_current);
-        if (idx + 1 >= Playlist.Count)
+
+        switch (RepeatMode)
         {
-            _player.Stop();
-            IsPlaying = false;
-            Status = "재생 완료";
+            case RepeatMode.RepeatOne:
+                if (_current is not null)
+                    PlayItem(_current);
+                return;
+            case RepeatMode.Shuffle:
+                PlayRandom();
+                return;
+            case RepeatMode.RepeatAll:
+                PlaySequential(+1, wrap: true);
+                return;
+            case RepeatMode.StopAfterList:
+            default:
+                PlaySequential(+1, wrap: false, stopStatus: "재생 완료");
+                return;
+        }
+    }
+
+    private void PlaySequential(int step, bool wrap, string? stopStatus = null)
+    {
+        if (Playlist.Count == 0)
+            return;
+
+        var idx = _current is null ? -1 : Playlist.IndexOf(_current);
+        var newIdx = idx + step;
+        if (newIdx < 0 || newIdx >= Playlist.Count)
+        {
+            if (!wrap)
+            {
+                _player.Stop();
+                IsPlaying = false;
+                if (stopStatus is not null)
+                    Status = stopStatus;
+                return;
+            }
+
+            newIdx = ((newIdx % Playlist.Count) + Playlist.Count) % Playlist.Count;
+        }
+
+        PlayItem(Playlist[newIdx]);
+    }
+
+    private void PlayRandom()
+    {
+        if (Playlist.Count == 0)
+            return;
+        if (Playlist.Count == 1)
+        {
+            PlayItem(Playlist[0]);
             return;
         }
 
-        PlayItem(Playlist[idx + 1]);
+        PlaylistItem candidate;
+        do
+        {
+            candidate = Playlist[_random.Next(Playlist.Count)];
+        } while (ReferenceEquals(candidate, _current));
+
+        PlayItem(candidate);
     }
 
     [RelayCommand]
@@ -361,6 +468,35 @@ public partial class PlayerViewModel : ObservableObject
         {
             Directory.CreateDirectory(Path.GetDirectoryName(PlaylistPath)!);
             File.WriteAllLines(PlaylistPath, Playlist.Select(i => i.Path));
+        }
+        catch
+        {
+            // 저장 실패는 무시.
+        }
+    }
+
+    private void LoadRepeatMode()
+    {
+        try
+        {
+            if (File.Exists(RepeatModePath) &&
+                Enum.TryParse<RepeatMode>(File.ReadAllText(RepeatModePath).Trim(), out var mode))
+            {
+                RepeatMode = mode;
+            }
+        }
+        catch
+        {
+            // 로드 실패는 무시(기본값인 전체 반복으로 시작).
+        }
+    }
+
+    private void SaveRepeatMode()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(RepeatModePath)!);
+            File.WriteAllText(RepeatModePath, RepeatMode.ToString());
         }
         catch
         {

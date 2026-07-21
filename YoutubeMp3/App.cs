@@ -44,8 +44,10 @@ public class App : Application
     {
         services.AddSingleton<IYoutubeService, YoutubeService>();
         services.AddSingleton<IAudioGainService, AudioGainService>();
+        services.AddSingleton<IFileTransferService, FileTransferService>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<PlayerViewModel>();
+        services.AddSingleton<FileTransferViewModel>();
         services.AddSingleton<MainWindow>();
     }
 }

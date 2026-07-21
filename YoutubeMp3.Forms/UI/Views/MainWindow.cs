@@ -13,15 +13,19 @@ public class MainWindow : YoutubeMp3Window
             new FrameworkPropertyMetadata(typeof(MainWindow)));
     }
 
-    public MainWindow(MainWindowViewModel viewModel, PlayerViewModel playerViewModel)
+    public MainWindow(
+        MainWindowViewModel viewModel,
+        PlayerViewModel playerViewModel,
+        FileTransferViewModel fileTransferViewModel)
     {
         DataContext = viewModel;
 
         // LazyRegion으로 전환할 페이지들을 만들어 넘긴다.
         // 추출·데시벨 화면은 이 창의 DataContext(MainWindowViewModel)를 상속하고,
-        // 플레이어는 자체 ViewModel을 DataContext로 쓴다(재생 상태를 페이지 전환과 무관하게 유지).
+        // 플레이어·전송 화면은 각자 자체 ViewModel을 DataContext로 쓴다(페이지 전환과 무관하게 상태 유지).
         var playerView = new PlayerView { DataContext = playerViewModel };
-        viewModel.InitializePages(new ExtractionView(), new VolumeAdjustView(), playerView);
+        var fileTransferView = new FileTransferView { DataContext = fileTransferViewModel };
+        viewModel.InitializePages(new ExtractionView(), new VolumeAdjustView(), playerView, fileTransferView);
 
         // 시작하자마자 FFmpeg 등 필수 파일을 백그라운드에서 준비한다(없으면 앱을 못 쓰므로).
         Loaded += async (_, _) => await viewModel.InitializeAsync();

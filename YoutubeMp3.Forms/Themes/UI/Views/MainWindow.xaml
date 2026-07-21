@@ -75,6 +75,26 @@
                             </Style>
                         </Button.Style>
                     </Button>
+
+                    <!--  같은 Wi-Fi의 휴대폰으로 mp3를 QR 코드로 전송  -->
+                    <Button
+                        Width="130"
+                        Height="26"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center"
+                        Command="{Binding ShowFileTransferCommand}"
+                        Content="📱 폰으로 전송"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource SecondaryButtonStyle}" TargetType="Button">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsFileTransferActive}" Value="True">
+                                        <Setter Property="Background" Value="#0078D4" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                 </StackPanel>
             </Setter.Value>
         </Setter>

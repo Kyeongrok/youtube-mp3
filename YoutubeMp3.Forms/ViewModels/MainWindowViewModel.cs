@@ -13,15 +13,18 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IYoutubeService _youtubeService;
     private readonly IAudioGainService _audioGainService;
     private readonly PlayerViewModel _playerViewModel;
+    private readonly FileTransferViewModel _fileTransferViewModel;
 
     public MainWindowViewModel(
         IYoutubeService youtubeService,
         IAudioGainService audioGainService,
-        PlayerViewModel playerViewModel)
+        PlayerViewModel playerViewModel,
+        FileTransferViewModel fileTransferViewModel)
     {
         _youtubeService = youtubeService;
         _audioGainService = audioGainService;
         _playerViewModel = playerViewModel;
+        _fileTransferViewModel = fileTransferViewModel;
     }
 
     /// <summary>
@@ -58,25 +61,29 @@ public partial class MainWindowViewModel : ObservableObject
     private object? _extractionPage;
     private object? _volumePage;
     private object? _playerPage;
+    private object? _fileTransferPage;
 
     // LazyRegion에 표시할 현재 페이지. 값이 바뀌면 애니메이션으로 전환된다.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsExtractionActive))]
     [NotifyPropertyChangedFor(nameof(IsVolumeActive))]
     [NotifyPropertyChangedFor(nameof(IsPlayerActive))]
+    [NotifyPropertyChangedFor(nameof(IsFileTransferActive))]
     private object? _currentPage;
 
     // 타이틀바 버튼에서 지금 보고 있는 화면을 강조하는 데 쓴다.
     public bool IsExtractionActive => ReferenceEquals(CurrentPage, _extractionPage);
     public bool IsVolumeActive => ReferenceEquals(CurrentPage, _volumePage);
     public bool IsPlayerActive => ReferenceEquals(CurrentPage, _playerPage);
+    public bool IsFileTransferActive => ReferenceEquals(CurrentPage, _fileTransferPage);
 
     /// <summary>뷰가 만든 페이지들을 받아 초기 화면(추출)을 세팅한다.</summary>
-    public void InitializePages(object extractionPage, object volumePage, object playerPage)
+    public void InitializePages(object extractionPage, object volumePage, object playerPage, object fileTransferPage)
     {
         _extractionPage = extractionPage;
         _volumePage = volumePage;
         _playerPage = playerPage;
+        _fileTransferPage = fileTransferPage;
         CurrentPage = _extractionPage;
     }
 
@@ -91,6 +98,21 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>플레이어 화면으로 이동한다.</summary>
     [RelayCommand]
     private void ShowPlayer() => CurrentPage = _playerPage;
+
+    /// <summary>휴대폰 전송 화면으로 이동한다. 들어가자마자 최신 다운로드 목록으로 QR을 준비한다.</summary>
+    [RelayCommand]
+    private void ShowFileTransfer()
+    {
+        CurrentPage = _fileTransferPage;
+        _fileTransferViewModel.RefreshFiles();
+    }
+
+    // 다른 화면으로 넘어가면 전송 서버(포트)를 계속 열어둘 이유가 없으므로 정리한다.
+    partial void OnCurrentPageChanged(object? value)
+    {
+        if (!ReferenceEquals(value, _fileTransferPage))
+            _fileTransferViewModel.StopSession();
+    }
 
     [ObservableProperty]
     private string _searchQuery = string.Empty;

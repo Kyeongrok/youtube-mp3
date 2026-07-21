@@ -72,6 +72,18 @@ public partial class PlayerView : UserControl
         DragDrop.DoDragDrop(PlaylistBox, item, DragDropEffects.Move);
     }
 
+    // 우클릭 위치의 곡을 먼저 선택해 둬야 컨텍스트 메뉴의 삭제/볼륨 조정이 그 곡에 적용된다
+    // (ListBoxItem은 왼쪽 버튼에만 기본 선택 처리를 한다).
+    private void OnListPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is not PlayerViewModel viewModel)
+            return;
+
+        var item = ItemFromElement(e.OriginalSource as DependencyObject);
+        if (item is not null)
+            viewModel.SelectedItem = item;
+    }
+
     private void OnItemDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (DataContext is PlayerViewModel viewModel && viewModel.SelectedItem is not null)

@@ -74,6 +74,10 @@ public partial class PlayerViewModel : ObservableObject
     // 사용자가 진행바를 잡고 있는 동안엔 타이머가 위치를 덮어쓰지 않게 한다.
     public bool IsSeeking { get; set; }
 
+    /// <summary>재생목록 컨텍스트 메뉴에서 "볼륨 조정"을 고르면 해당 파일 경로와 함께 발생한다.
+    /// PlayerViewModel은 볼륨 조절 화면을 모르므로, 화면 전환은 이 이벤트를 구독하는 MainWindowViewModel이 맡는다.</summary>
+    public event Action<string>? VolumeAdjustRequested;
+
     public PlayerViewModel()
     {
         _player.MediaOpened += OnMediaOpened;
@@ -382,6 +386,16 @@ public partial class PlayerViewModel : ObservableObject
         Playlist.Remove(removed);
         SavePlaylist();
         Status = $"삭제됨 · 총 {Playlist.Count}곡";
+    }
+
+    /// <summary>선택한 곡의 볼륨을 조절하러 볼륨 조절 화면으로 이동을 요청한다.</summary>
+    [RelayCommand]
+    private void AdjustSelectedVolume()
+    {
+        if (SelectedItem is null)
+            return;
+
+        VolumeAdjustRequested?.Invoke(SelectedItem.Path);
     }
 
     [RelayCommand]

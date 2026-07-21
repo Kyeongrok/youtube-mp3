@@ -25,6 +25,15 @@ public partial class MainWindowViewModel : ObservableObject
         _audioGainService = audioGainService;
         _playerViewModel = playerViewModel;
         _fileTransferViewModel = fileTransferViewModel;
+
+        ExtractionQueue.CollectionChanged += (_, _) => OnPropertyChanged(nameof(PendingQueueDisplay));
+
+        // 재생목록 컨텍스트 메뉴의 "볼륨 조정"에서 온 요청 - 대상 파일을 지정하고 화면을 전환한다.
+        _playerViewModel.VolumeAdjustRequested += path =>
+        {
+            SetVolumeFiles(new[] { path });
+            ShowVolume();
+        };
     }
 
     /// <summary>
@@ -54,6 +63,8 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     public ObservableCollection<VideoSearchResult> SearchResults { get; } = new();
+
+    public ObservableCollection<QueuedExtraction> ExtractionQueue { get; } = new();
 
     // ── 페이지 전환 (LazyRegion) ──────────────────────────────────
 
@@ -121,7 +132,17 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _isSearching;
 
     [ObservableProperty]
+    private bool _isLoadingMoreResults;
+
+    [ObservableProperty]
+    private bool _hasMoreResults;
+
+    [ObservableProperty]
     private VideoSearchResult? _selectedSearchResult;
+
+    // 검색 API에 페이지 토큰이 없어 "더 보기"를 누를 때마다 이 개수만큼 늘려 재검색한다.
+    private const int SearchPageSize = 20;
+    private int _requestedResultCount = SearchPageSize;
 
     [ObservableProperty]
     private string _url = string.Empty;
@@ -146,13 +167,16 @@ public partial class MainWindowViewModel : ObservableObject
         IsSearching = true;
         Status = "검색 중...";
         SearchResults.Clear();
+        _requestedResultCount = SearchPageSize;
+        HasMoreResults = false;
 
         try
         {
-            var results = await _youtubeService.SearchAsync(SearchQuery);
+            var results = await _youtubeService.SearchAsync(SearchQuery, _requestedResultCount);
             foreach (var result in results)
                 SearchResults.Add(result);
 
+            HasMoreResults = results.Count >= _requestedResultCount;
             Status = SearchResults.Count > 0 ? $"검색 결과 {SearchResults.Count}건" : "검색 결과가 없습니다.";
         }
         catch (Exception ex)
@@ -165,39 +189,102 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private bool CanDownload() => !IsDownloading && !string.IsNullOrWhiteSpace(Url);
+    private bool CanLoadMoreResults() => !IsSearching && !IsLoadingMoreResults && HasMoreResults;
 
-    [RelayCommand(CanExecute = nameof(CanDownload))]
-    private async Task DownloadAsync()
+    /// <summary>검색 결과 목록 맨 아래의 "더 보기"로 다음 페이지를 이어 붙인다.</summary>
+    [RelayCommand(CanExecute = nameof(CanLoadMoreResults))]
+    private async Task LoadMoreResultsAsync()
     {
-        IsDownloading = true;
-        ProgressPercentage = 0;
-        Status = "준비 중...";
-
-        var progress = new Progress<AudioDownloadProgress>(p =>
-        {
-            ProgressPercentage = p.Percentage;
-            Status = p.Status;
-        });
+        IsLoadingMoreResults = true;
 
         try
         {
-            var outputDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "YoutubeMp3");
-            Directory.CreateDirectory(outputDirectory);
+            _requestedResultCount += SearchPageSize;
+            var results = await _youtubeService.SearchAsync(SearchQuery, _requestedResultCount);
 
-            var filePath = await _youtubeService.DownloadAudioAsync(Url, outputDirectory, progress);
-            ProgressPercentage = 100;
-            Status = $"완료: {Path.GetFileName(filePath)}";
-            LastDownloadedFilePath = filePath;
+            var existingUrls = SearchResults.Select(r => r.Url).ToHashSet();
+            var newResults = results.Where(r => !existingUrls.Contains(r.Url)).ToList();
+            foreach (var result in newResults)
+                SearchResults.Add(result);
+
+            // 재검색해도 새 항목이 없으면 더 가져올 결과가 없다고 본다.
+            HasMoreResults = newResults.Count > 0 && results.Count >= _requestedResultCount;
+            Status = $"검색 결과 {SearchResults.Count}건";
         }
         catch (Exception ex)
         {
-            Status = $"오류: {ex.Message}";
+            Status = $"검색 오류: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingMoreResults = false;
+        }
+    }
+
+    private bool _isProcessingExtractionQueue;
+
+    // 대기열 맨 앞[0]이 지금 처리 중인 항목이므로, 2번째부터가 "대기 중"이다.
+    public string PendingQueueDisplay => ExtractionQueue.Count > 1
+        ? $"대기 중 ({ExtractionQueue.Count - 1}건): " + string.Join(", ", ExtractionQueue.Skip(1).Select(job => job.Title))
+        : string.Empty;
+
+    private bool CanDownload() => !string.IsNullOrWhiteSpace(Url);
+
+    // 다운로드 중에도 버튼을 막지 않고 대기열에 쌓아, 처리 중인 항목이 끝나는 대로 이어서 추출한다.
+    [RelayCommand(CanExecute = nameof(CanDownload))]
+    private void Download()
+    {
+        var title = SelectedSearchResult is { } selected && selected.Url == Url ? selected.Title : Url;
+        ExtractionQueue.Add(new QueuedExtraction(Url, title));
+
+        if (!_isProcessingExtractionQueue)
+            _ = ProcessExtractionQueueAsync();
+    }
+
+    private async Task ProcessExtractionQueueAsync()
+    {
+        _isProcessingExtractionQueue = true;
+        IsDownloading = true;
+
+        try
+        {
+            while (ExtractionQueue.Count > 0)
+            {
+                var job = ExtractionQueue[0];
+                ProgressPercentage = 0;
+                Status = $"준비 중... ({job.Title})";
+
+                var progress = new Progress<AudioDownloadProgress>(p =>
+                {
+                    ProgressPercentage = p.Percentage;
+                    Status = p.Status;
+                });
+
+                try
+                {
+                    var outputDirectory = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "YoutubeMp3");
+                    Directory.CreateDirectory(outputDirectory);
+
+                    var filePath = await _youtubeService.DownloadAudioAsync(job.Url, outputDirectory, progress);
+                    ProgressPercentage = 100;
+                    Status = $"완료: {Path.GetFileName(filePath)}";
+                    LastDownloadedFilePath = filePath;
+                }
+                catch (Exception ex)
+                {
+                    Status = $"오류 ({job.Title}): {ex.Message}";
+                }
+                finally
+                {
+                    ExtractionQueue.RemoveAt(0);
+                }
+            }
         }
         finally
         {
             IsDownloading = false;
+            _isProcessingExtractionQueue = false;
         }
     }
 
@@ -327,7 +414,15 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSearchQueryChanged(string value) => SearchCommand.NotifyCanExecuteChanged();
 
-    partial void OnIsSearchingChanged(bool value) => SearchCommand.NotifyCanExecuteChanged();
+    partial void OnIsSearchingChanged(bool value)
+    {
+        SearchCommand.NotifyCanExecuteChanged();
+        LoadMoreResultsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsLoadingMoreResultsChanged(bool value) => LoadMoreResultsCommand.NotifyCanExecuteChanged();
+
+    partial void OnHasMoreResultsChanged(bool value) => LoadMoreResultsCommand.NotifyCanExecuteChanged();
 
     partial void OnSelectedSearchResultChanged(VideoSearchResult? value)
     {
@@ -338,8 +433,6 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     partial void OnUrlChanged(string value) => DownloadCommand.NotifyCanExecuteChanged();
-
-    partial void OnIsDownloadingChanged(bool value) => DownloadCommand.NotifyCanExecuteChanged();
 
     partial void OnLastDownloadedFilePathChanged(string? value)
     {

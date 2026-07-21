@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="YoutubeMp3.Forms.UI.Views.ExtractionView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -14,6 +14,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -161,8 +162,30 @@
             </TextBlock.Style>
         </TextBlock>
 
+        <!--  더 가져올 결과가 있을 때만 표시. 리스트 바로 아래 있어 스크롤을 내리면 자연스럽게 보인다  -->
+        <Button
+            Grid.Row="2"
+            Margin="0,8,0,0"
+            HorizontalAlignment="Stretch"
+            Command="{Binding LoadMoreResultsCommand}"
+            Content="더 보기">
+            <Button.Style>
+                <Style BasedOn="{StaticResource SecondaryButtonStyle}" TargetType="Button">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasMoreResults}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsLoadingMoreResults}" Value="True">
+                            <Setter Property="Content" Value="불러오는 중..." />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
+        </Button>
+
         <!--  URL 입력 + 추출 버튼(입력 필드 바로 오른쪽)  -->
-        <Grid Grid.Row="2" Margin="0,16,0,0">
+        <Grid Grid.Row="3" Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -189,7 +212,7 @@
         </Grid>
 
         <StackPanel
-            Grid.Row="3"
+            Grid.Row="4"
             Margin="0,12,0,0"
             Orientation="Horizontal">
             <Button
@@ -211,7 +234,7 @@
         </StackPanel>
 
         <ProgressBar
-            Grid.Row="4"
+            Grid.Row="5"
             Height="6"
             Margin="0,16,0,0"
             Background="#2D2D2D"
@@ -221,11 +244,31 @@
             Value="{Binding ProgressPercentage, Mode=OneWay}" />
 
         <TextBlock
-            Grid.Row="5"
+            Grid.Row="6"
             Margin="0,8,0,0"
             FontSize="12"
             Foreground="#CCCCCC"
             Text="{Binding Status}"
             TextWrapping="Wrap" />
+
+        <!--  대기열에 처리 중인 항목 외에 더 있을 때만 표시  -->
+        <TextBlock
+            Grid.Row="6"
+            Margin="0,26,0,0"
+            FontSize="11"
+            Foreground="#888888"
+            Text="{Binding PendingQueueDisplay}"
+            TextWrapping="Wrap">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding PendingQueueDisplay}" Value="">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
     </Grid>
 </UserControl>

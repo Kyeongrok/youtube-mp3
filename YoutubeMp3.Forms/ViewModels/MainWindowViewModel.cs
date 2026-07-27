@@ -362,6 +362,10 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private double _volumeDb = 3;
 
+    // 조절 성공 시 원본 mp3를 지울지 여부. 원본까지 남기면 폴더가 금방 지저분해지므로 기본 삭제.
+    [ObservableProperty]
+    private bool _deleteOriginalFileAfterAdjust = true;
+
     // 조절 중 여부(재진입 방지·버튼 비활성).
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(VolumeUpCommand))]
@@ -428,8 +432,26 @@ public partial class MainWindowViewModel : ObservableObject
         Status = "볼륨 조절 중...";
         try
         {
-            var outputPath = await _audioGainService.AdjustGainAsync(VolumeFilePath, gainDb);
-            Status = $"완료: {Path.GetFileName(outputPath)} ({gainDb:+0.#;-0.#}dB)";
+            var inputPath = VolumeFilePath;
+            var outputPath = await _audioGainService.AdjustGainAsync(inputPath, gainDb);
+            var resultStatus = $"완료: {Path.GetFileName(outputPath)} ({gainDb:+0.#;-0.#}dB)";
+
+            if (DeleteOriginalFileAfterAdjust)
+            {
+                try
+                {
+                    File.Delete(inputPath);
+                    VolumeFilePath = outputPath;
+                    VolumeFileName = Path.GetFileName(outputPath);
+                    resultStatus += " · 기존 파일 삭제됨";
+                }
+                catch (Exception ex)
+                {
+                    resultStatus += $" · 기존 파일 삭제 실패: {ex.Message}";
+                }
+            }
+
+            Status = resultStatus;
             LastDownloadedFilePath = outputPath; // '폴더 열기'로 결과 파일을 바로 확인
         }
         catch (Exception ex)

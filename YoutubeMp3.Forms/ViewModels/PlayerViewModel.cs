@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using YoutubeMp3.Forms.UI.Views;
 
 namespace YoutubeMp3.Forms.ViewModels;
 
@@ -33,17 +34,26 @@ public partial class PlaylistItem : ObservableObject
 {
     public PlaylistItem(string path)
     {
-        Path = path;
-        Name = System.IO.Path.GetFileName(path);
+        _path = path;
+        _name = System.IO.Path.GetFileName(path);
     }
 
-    public string Path { get; }
+    [ObservableProperty]
+    private string _path;
 
-    public string Name { get; }
+    [ObservableProperty]
+    private string _name;
 
     // 지금 재생 중인 곡이면 true. 리스트에서 ▶·강조 색으로 구분하는 데 바인딩된다.
     [ObservableProperty]
     private bool _isCurrent;
+
+    /// <summary>디스크에서 파일명을 바꾼 뒤 호출해 목록에 반영한다.</summary>
+    public void Rename(string newPath)
+    {
+        Path = newPath;
+        Name = System.IO.Path.GetFileName(newPath);
+    }
 }
 
 /// <summary>
@@ -406,6 +416,54 @@ public partial class PlayerViewModel : ObservableObject
         }
 
         RemoveFromPlaylist(item, "파일 삭제됨");
+    }
+
+    /// <summary>선택한 곡의 실제 파일명을 바꾼다(확장자는 유지).</summary>
+    [RelayCommand]
+    private void RenameSelectedFile()
+    {
+        if (SelectedItem is null)
+            return;
+
+        var item = SelectedItem;
+        var extension = Path.GetExtension(item.Path);
+        var currentBaseName = Path.GetFileNameWithoutExtension(item.Path);
+
+        var newBaseName = RenameDialog.PromptForName(Application.Current.MainWindow, currentBaseName);
+        if (string.IsNullOrWhiteSpace(newBaseName) || newBaseName == currentBaseName)
+            return;
+
+        if (newBaseName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            Status = "파일명에 사용할 수 없는 문자가 포함되어 있습니다";
+            return;
+        }
+
+        var directory = Path.GetDirectoryName(item.Path)!;
+        var newPath = Path.Combine(directory, newBaseName + extension);
+
+        if (File.Exists(newPath))
+        {
+            Status = "같은 이름의 파일이 이미 존재합니다";
+            return;
+        }
+
+        try
+        {
+            File.Move(item.Path, newPath);
+        }
+        catch (Exception ex)
+        {
+            Status = $"파일명 변경 실패: {ex.Message}";
+            return;
+        }
+
+        item.Rename(newPath);
+        if (ReferenceEquals(item, _current))
+            CurrentName = item.Name;
+
+        SavePlaylist();
+        Status = $"파일명 변경됨 · {item.Name}";
     }
 
     // 재생목록에서 제거하는 공통 처리(현재 곡이면 정지 + 강조 해제 + 저장 + 상태 표시).

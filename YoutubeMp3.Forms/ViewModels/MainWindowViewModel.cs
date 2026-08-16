@@ -366,6 +366,10 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _deleteOriginalFileAfterAdjust = true;
 
+    // 조절 성공 시 결과 mp3를 재생목록에 넣을지 여부. 조절한 파일은 대개 바로 들어보므로 기본 추가.
+    [ObservableProperty]
+    private bool _addToPlaylistAfterAdjust = true;
+
     // 조절 중 여부(재진입 방지·버튼 비활성).
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(VolumeUpCommand))]
@@ -440,7 +444,10 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 try
                 {
-                    File.Delete(inputPath);
+                    // 그 파일을 재생 중이면 MediaPlayer가 핸들을 잡고 있어 삭제가 실패한다. 먼저 재생을 끊는다.
+                    _playerViewModel.ReleaseFile(inputPath);
+                    await DeleteWithRetryAsync(inputPath);
+                    _playerViewModel.ReplacePath(inputPath, outputPath);
                     VolumeFilePath = outputPath;
                     VolumeFileName = Path.GetFileName(outputPath);
                     resultStatus += " · 기존 파일 삭제됨";
@@ -449,6 +456,13 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     resultStatus += $" · 기존 파일 삭제 실패: {ex.Message}";
                 }
+            }
+
+            // 원본을 지운 경우엔 ReplacePath로 이미 목록에 들어가 있고, AddFiles는 같은 경로를 두 번 넣지 않는다.
+            if (AddToPlaylistAfterAdjust)
+            {
+                _playerViewModel.AddFiles(new[] { outputPath });
+                resultStatus += " · 재생목록에 추가됨";
             }
 
             Status = resultStatus;
@@ -461,6 +475,23 @@ public partial class MainWindowViewModel : ObservableObject
         finally
         {
             IsAdjustingVolume = false;
+        }
+    }
+
+    /// <summary>재생을 끊어도 MediaPlayer가 핸들을 놓기까지 잠깐 걸릴 수 있어 몇 번 다시 시도한다.</summary>
+    private static async Task DeleteWithRetryAsync(string path)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (Exception ex) when (attempt < 5 && ex is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(150);
+            }
         }
     }
 

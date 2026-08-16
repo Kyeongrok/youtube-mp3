@@ -85,14 +85,24 @@
                 ToolTip="지정한 dB만큼 볼륨을 줄여 원본 옆에 새 mp3로 저장" />
         </Grid>
 
-        <!--  볼륨 조절 성공 시 원본 mp3를 지울지 여부(기본 체크)  -->
-        <CheckBox
+        <!--  볼륨 조절 성공 후 처리 옵션(둘 다 기본 체크)  -->
+        <StackPanel
             Grid.Row="1"
             Margin="0,10,0,0"
-            VerticalContentAlignment="Center"
-            Content="완료 후 기존 파일 삭제"
-            Foreground="White"
-            IsChecked="{Binding DeleteOriginalFileAfterAdjust, Mode=TwoWay}" />
+            Orientation="Horizontal">
+            <CheckBox
+                VerticalContentAlignment="Center"
+                Content="완료 후 기존 파일 삭제"
+                Foreground="White"
+                IsChecked="{Binding DeleteOriginalFileAfterAdjust, Mode=TwoWay}" />
+            <CheckBox
+                Margin="20,0,0,0"
+                VerticalContentAlignment="Center"
+                Content="완료 후 재생목록에 추가"
+                Foreground="White"
+                IsChecked="{Binding AddToPlaylistAfterAdjust, Mode=TwoWay}"
+                ToolTip="조절된 mp3를 플레이어 재생목록에 추가합니다" />
+        </StackPanel>
 
         <TextBlock
             Grid.Row="2"

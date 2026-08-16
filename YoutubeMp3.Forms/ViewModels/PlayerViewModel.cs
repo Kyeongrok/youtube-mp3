@@ -82,6 +82,9 @@ public partial class PlayerViewModel : ObservableObject
     private PlaylistItem? _current;
     private bool _suppressSeek;
 
+    // ReleaseFile로 미디어를 닫은 상태. 이때 Play()는 소스가 없어 아무 일도 안 하므로 다시 열어야 한다.
+    private bool _mediaClosed;
+
     // 사용자가 진행바를 잡고 있는 동안엔 타이머가 위치를 덮어쓰지 않게 한다.
     public bool IsSeeking { get; set; }
 
@@ -246,6 +249,7 @@ public partial class PlayerViewModel : ObservableObject
         try
         {
             _player.Open(new Uri(item.Path, UriKind.Absolute));
+            _mediaClosed = false;
             _suppressSeek = true;
             PositionSeconds = 0;
             DurationSeconds = 0;
@@ -268,6 +272,13 @@ public partial class PlayerViewModel : ObservableObject
         if (_current is null)
         {
             PlayItem(null);
+            return;
+        }
+
+        // 파일을 놓아주느라 닫아 둔 상태면 다시 열어서 처음부터 재생한다.
+        if (_mediaClosed)
+        {
+            PlayItem(_current);
             return;
         }
 
@@ -406,6 +417,8 @@ public partial class PlayerViewModel : ObservableObject
 
         try
         {
+            // 재생 중인 곡이면 핸들을 잡고 있어 삭제가 실패한다. 먼저 재생을 끊는다.
+            ReleaseFile(item.Path);
             if (File.Exists(item.Path))
                 File.Delete(item.Path);
         }
@@ -480,6 +493,48 @@ public partial class PlayerViewModel : ObservableObject
         Playlist.Remove(item);
         SavePlaylist();
         Status = $"{statusVerb} · 총 {Playlist.Count}곡";
+    }
+
+    /// <summary>다른 화면에서 이 파일을 지우거나 옮길 수 있도록 재생을 끊고 파일 핸들을 놓는다.
+    /// MediaPlayer는 Stop만으로는 파일을 계속 잡고 있어 Close까지 해야 삭제가 된다.
+    /// 지금 재생 중인 곡이 아니면 아무 일도 하지 않는다.</summary>
+    public void ReleaseFile(string path)
+    {
+        if (_current is null || !string.Equals(_current.Path, path, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _player.Stop();
+        _player.Close();
+        IsPlaying = false;
+        _suppressSeek = true;
+        PositionSeconds = 0;
+        DurationSeconds = 0;
+        _suppressSeek = false;
+        Status = $"재생 중지 · {_current.Name}";
+    }
+
+    /// <summary>볼륨 조절처럼 원본을 새 파일로 대체했을 때, 재생목록 항목을 새 경로로 갈아끼운다.
+    /// 그대로 두면 목록에 이미 지워진 파일이 남는다.</summary>
+    public void ReplacePath(string oldPath, string newPath)
+    {
+        var item = Playlist.FirstOrDefault(i => string.Equals(i.Path, oldPath, StringComparison.OrdinalIgnoreCase));
+        if (item is null)
+            return;
+
+        // 같은 dB로 두 번 조절하면 새 경로가 이미 목록에 있을 수 있다. 이때는 중복 대신 옛 항목만 뺀다.
+        var duplicate = Playlist.Any(i =>
+            !ReferenceEquals(i, item) && string.Equals(i.Path, newPath, StringComparison.OrdinalIgnoreCase));
+        if (duplicate)
+        {
+            RemoveFromPlaylist(item, "볼륨 조절본으로 교체됨");
+            return;
+        }
+
+        item.Rename(newPath);
+        if (ReferenceEquals(item, _current))
+            CurrentName = item.Name;
+
+        SavePlaylist();
     }
 
     /// <summary>선택한 곡의 볼륨을 조절하러 볼륨 조절 화면으로 이동을 요청한다.</summary>

@@ -401,7 +401,7 @@ public partial class PlayerViewModel : ObservableObject
 
     /// <summary>선택한 곡을 재생목록에서 빼는 것뿐 아니라 디스크의 실제 파일도 지운다. 되돌릴 수 없어 먼저 확인을 받는다.</summary>
     [RelayCommand]
-    private void DeleteSelectedFile()
+    private async Task DeleteSelectedFileAsync()
     {
         if (SelectedItem is null)
             return;
@@ -420,7 +420,7 @@ public partial class PlayerViewModel : ObservableObject
             // 재생 중인 곡이면 핸들을 잡고 있어 삭제가 실패한다. 먼저 재생을 끊는다.
             ReleaseFile(item.Path);
             if (File.Exists(item.Path))
-                File.Delete(item.Path);
+                await FileOperations.DeleteAsync(item.Path);
         }
         catch (Exception ex)
         {
@@ -433,7 +433,7 @@ public partial class PlayerViewModel : ObservableObject
 
     /// <summary>선택한 곡의 실제 파일명을 바꾼다(확장자는 유지).</summary>
     [RelayCommand]
-    private void RenameSelectedFile()
+    private async Task RenameSelectedFileAsync()
     {
         if (SelectedItem is null)
             return;
@@ -463,7 +463,9 @@ public partial class PlayerViewModel : ObservableObject
 
         try
         {
-            File.Move(item.Path, newPath);
+            // 재생 중인 곡이면 MediaPlayer가 파일을 잡고 있어 이름이 바뀌지 않는다. 먼저 재생을 끊는다.
+            ReleaseFile(item.Path);
+            await FileOperations.MoveAsync(item.Path, newPath);
         }
         catch (Exception ex)
         {

@@ -19,11 +19,11 @@ public sealed class YoutubeService : IYoutubeService
         // mis-decode/print non-ASCII text (e.g. Korean search queries) unless forced into UTF-8 mode.
         Environment.SetEnvironmentVariable("PYTHONUTF8", "1");
 
-        _binaryDirectory = AppContext.BaseDirectory;
+        _binaryDirectory = ToolPaths.ToolsDirectory;
         _youtubeDl = new YoutubeDL
         {
-            YoutubeDLPath = Path.Combine(_binaryDirectory, "yt-dlp.exe"),
-            FFmpegPath = Path.Combine(_binaryDirectory, "ffmpeg.exe"),
+            YoutubeDLPath = ToolPaths.YtDlp,
+            FFmpegPath = ToolPaths.FFmpeg,
             OutputFolder = _binaryDirectory,
             RestrictFilenames = true,
         };
@@ -98,7 +98,7 @@ public sealed class YoutubeService : IYoutubeService
     {
         var options = new OptionSet
         {
-            JsRuntimes = new MultiValue<string>(new[] { $"deno:{Path.Combine(_binaryDirectory, "deno.exe")}" }),
+            JsRuntimes = new MultiValue<string>(new[] { $"deno:{ToolPaths.Deno}" }),
         };
 
         // "Sign in to confirm you're not a bot" 오류 대응: 내보낸 쿠키 파일을 실어 보낸다.
@@ -138,7 +138,7 @@ public sealed class YoutubeService : IYoutubeService
     private bool BinariesExist() =>
         File.Exists(_youtubeDl.YoutubeDLPath) &&
         File.Exists(_youtubeDl.FFmpegPath) &&
-        File.Exists(Path.Combine(_binaryDirectory, "deno.exe"));
+        File.Exists(ToolPaths.Deno);
 
     private static string FormatDuration(float? seconds)
     {

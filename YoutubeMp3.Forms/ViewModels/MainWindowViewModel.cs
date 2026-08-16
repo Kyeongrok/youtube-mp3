@@ -462,7 +462,7 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     // 그 파일을 재생 중이면 MediaPlayer가 핸들을 잡고 있어 삭제가 실패한다. 먼저 재생을 끊는다.
                     _playerViewModel.ReleaseFile(inputPath);
-                    await DeleteWithRetryAsync(inputPath);
+                    await FileOperations.DeleteAsync(inputPath);
                     _playerViewModel.ReplacePath(inputPath, outputPath);
                     VolumeFilePath = outputPath;
                     VolumeFileName = Path.GetFileName(outputPath);
@@ -491,23 +491,6 @@ public partial class MainWindowViewModel : ObservableObject
         finally
         {
             IsAdjustingVolume = false;
-        }
-    }
-
-    /// <summary>재생을 끊어도 MediaPlayer가 핸들을 놓기까지 잠깐 걸릴 수 있어 몇 번 다시 시도한다.</summary>
-    private static async Task DeleteWithRetryAsync(string path)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                File.Delete(path);
-                return;
-            }
-            catch (Exception ex) when (attempt < 5 && ex is IOException or UnauthorizedAccessException)
-            {
-                await Task.Delay(150);
-            }
         }
     }
 

@@ -10,7 +10,7 @@ namespace YoutubeMp3.Main.Services;
 /// </summary>
 public sealed class AudioGainService : IAudioGainService
 {
-    private readonly string _ffmpegPath = Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
+    private readonly string _ffmpegPath = ToolPaths.FFmpeg;
 
     public async Task<string> AdjustGainAsync(string inputPath, double gainDb, CancellationToken ct = default)
     {

@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using YoutubeMp3.Forms.UI.Views;
 using YoutubeMp3.Main.Services;
 
 namespace YoutubeMp3.Forms.ViewModels;
@@ -14,17 +16,20 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IAudioGainService _audioGainService;
     private readonly PlayerViewModel _playerViewModel;
     private readonly FileTransferViewModel _fileTransferViewModel;
+    private readonly AppSettings _settings;
 
     public MainWindowViewModel(
         IYoutubeService youtubeService,
         IAudioGainService audioGainService,
         PlayerViewModel playerViewModel,
-        FileTransferViewModel fileTransferViewModel)
+        FileTransferViewModel fileTransferViewModel,
+        AppSettings settings)
     {
         _youtubeService = youtubeService;
         _audioGainService = audioGainService;
         _playerViewModel = playerViewModel;
         _fileTransferViewModel = fileTransferViewModel;
+        _settings = settings;
 
         ExtractionQueue.CollectionChanged += (_, _) => OnPropertyChanged(nameof(PendingQueueDisplay));
 
@@ -96,6 +101,17 @@ public partial class MainWindowViewModel : ObservableObject
         _playerPage = playerPage;
         _fileTransferPage = fileTransferPage;
         CurrentPage = _extractionPage;
+    }
+
+    /// <summary>설정 값이 바뀌면 발생한다. 창 크기처럼 뷰가 직접 적용해야 하는 설정이 있어 알려 준다.</summary>
+    public event Action? SettingsChanged;
+
+    /// <summary>타이틀바 맨 왼쪽 햄버거(☰) 버튼 - 설정 창을 연다.</summary>
+    [RelayCommand]
+    private void OpenSettings()
+    {
+        if (SettingsDialog.Edit(Application.Current?.MainWindow, _settings))
+            SettingsChanged?.Invoke();
     }
 
     /// <summary>Youtube Mp3 추출 화면으로 이동한다.</summary>

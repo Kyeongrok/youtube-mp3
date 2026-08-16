@@ -30,12 +30,21 @@
 
                             <!--  Title Bar  -->
                             <Grid Grid.Row="0" Background="#2D2D2D">
-                                <TextBlock
-                                    Margin="12,0,0,0"
+                                <!--  맨 왼쪽: 앱별 콘텐츠(설정 버튼 등) + 제목  -->
+                                <StackPanel
+                                    HorizontalAlignment="Left"
                                     VerticalAlignment="Center"
-                                    FontSize="13"
-                                    Foreground="#CCCCCC"
-                                    Text="{TemplateBinding Title}" />
+                                    Orientation="Horizontal">
+                                    <ContentPresenter
+                                        VerticalAlignment="Center"
+                                        Content="{TemplateBinding TitleBarLeftContent}" />
+                                    <TextBlock
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Center"
+                                        FontSize="13"
+                                        Foreground="#CCCCCC"
+                                        Text="{TemplateBinding Title}" />
+                                </StackPanel>
                                 <!--  앱별 타이틀바 콘텐츠(가운데)  -->
                                 <ContentPresenter
                                     HorizontalAlignment="Center"

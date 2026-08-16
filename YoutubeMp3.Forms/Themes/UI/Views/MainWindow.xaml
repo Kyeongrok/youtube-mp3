@@ -18,6 +18,23 @@
         <Setter Property="MinHeight" Value="300" />
         <Setter Property="WindowStyle" Value="None" />
 
+        <!--  타이틀바 맨 왼쪽 햄버거 버튼 - 설정 창  -->
+        <Setter Property="TitleBarLeftContent">
+            <Setter.Value>
+                <Button
+                    Width="36"
+                    Height="26"
+                    Margin="6,0,0,0"
+                    VerticalAlignment="Center"
+                    Command="{Binding OpenSettingsCommand}"
+                    Content="☰"
+                    FontSize="14"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    ToolTip="설정"
+                    WindowChrome.IsHitTestVisibleInChrome="True" />
+            </Setter.Value>
+        </Setter>
+
         <!--  타이틀바 가운데 내비게이션 버튼들 (각자 개별 화면으로 이동)  -->
         <Setter Property="TitleBarContent">
             <Setter.Value>

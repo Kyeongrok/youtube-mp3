@@ -42,6 +42,8 @@ public class App : Application
 
     private void ConfigureServices(IServiceCollection services)
     {
+        // 설정은 시작할 때 한 번 읽어 앱 전체가 같은 인스턴스를 본다(설정 창에서 바꾸면 즉시 반영).
+        services.AddSingleton(AppSettings.Load());
         services.AddSingleton<IYoutubeService, YoutubeService>();
         services.AddSingleton<IAudioGainService, AudioGainService>();
         services.AddSingleton<IFileTransferService, FileTransferService>();

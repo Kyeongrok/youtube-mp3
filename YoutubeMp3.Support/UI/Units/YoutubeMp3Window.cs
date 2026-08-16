@@ -22,6 +22,18 @@ public class YoutubeMp3Window : Window
         set => SetValue(TitleBarContentProperty, value);
     }
 
+    /// <summary>타이틀바 맨 왼쪽(제목 앞)에 표시할 앱별 콘텐츠(예: 설정 버튼).</summary>
+    public static readonly DependencyProperty TitleBarLeftContentProperty =
+        DependencyProperty.Register(
+            nameof(TitleBarLeftContent), typeof(object), typeof(YoutubeMp3Window),
+            new PropertyMetadata(null));
+
+    public object? TitleBarLeftContent
+    {
+        get => GetValue(TitleBarLeftContentProperty);
+        set => SetValue(TitleBarLeftContentProperty, value);
+    }
+
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);

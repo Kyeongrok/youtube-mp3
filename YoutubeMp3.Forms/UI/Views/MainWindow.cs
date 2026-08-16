@@ -13,12 +13,16 @@ public class MainWindow : YoutubeMp3Window
             new FrameworkPropertyMetadata(typeof(MainWindow)));
     }
 
+    private readonly AppSettings _settings;
+
     public MainWindow(
         MainWindowViewModel viewModel,
         PlayerViewModel playerViewModel,
-        FileTransferViewModel fileTransferViewModel)
+        FileTransferViewModel fileTransferViewModel,
+        AppSettings settings)
     {
         DataContext = viewModel;
+        _settings = settings;
 
         // 타이틀바에 릴리즈 버전을 표시한다(YoutubeMp3.csproj의 <Version>).
         var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version;
@@ -40,14 +44,19 @@ public class MainWindow : YoutubeMp3Window
                 ApplyPlayerHeight();
         };
 
+        // 설정에서 높이를 바꿨는데 지금 플레이어를 보고 있다면 바로 반영한다.
+        viewModel.SettingsChanged += () =>
+        {
+            if (viewModel.IsPlayerActive)
+                ApplyPlayerHeight();
+        };
+
         // 시작하자마자 FFmpeg 등 필수 파일을 백그라운드에서 준비한다(없으면 앱을 못 쓰므로).
         Loaded += async (_, _) => await viewModel.InitializeAsync();
     }
 
-    // 플레이어 화면에서 보장할 최소 높이. 이미 이보다 크면 그대로 두고,
+    // 플레이어 화면에서 보장할 최소 높이(설정 창에서 조절, 기본 800). 이미 이보다 크면 그대로 두고,
     // 다른 화면으로 돌아가도 되돌리지 않는다(왔다 갔다 해도 더는 안 커진다).
-    private const double PlayerMinimumHeight = 1200;
-
     private void ApplyPlayerHeight()
     {
         // 최대화 상태에선 어차피 화면 전체를 쓰므로 건드리지 않는다.
@@ -56,7 +65,7 @@ public class MainWindow : YoutubeMp3Window
 
         // 작업 표시줄을 뺀 화면 높이를 넘지 않도록 잘라 준다.
         var workArea = SystemParameters.WorkArea;
-        var target = Math.Min(PlayerMinimumHeight, workArea.Height);
+        var target = Math.Min(_settings.PlayerMinimumHeight, workArea.Height);
         if (ActualHeight >= target)
             return;
 

@@ -103,6 +103,9 @@ public partial class MainWindowViewModel : ObservableObject
         CurrentPage = _extractionPage;
     }
 
+    /// <summary>타이틀바의 재생·정지 버튼이 바인딩하는 플레이어. 어느 화면에 있든 재생을 조작할 수 있다.</summary>
+    public PlayerViewModel Player => _playerViewModel;
+
     /// <summary>설정 값이 바뀌면 발생한다. 창 크기처럼 뷰가 직접 적용해야 하는 설정이 있어 알려 준다.</summary>
     public event Action? SettingsChanged;
 

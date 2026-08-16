@@ -1,0 +1,35 @@
+<UserControl
+    x:Class="YoutubeMp3.Forms.UI.Views.AppMenuButton"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+    shell:WindowChrome.IsHitTestVisibleInChrome="True">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/YoutubeMp3.Forms;component/Themes/SharedStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!--  타이틀바 맨 왼쪽 햄버거 메뉴. 자주 쓰지 않는 화면·설정을 여기에 모아 둔다.  -->
+    <Button
+        x:Name="MenuButton"
+        Width="36"
+        Height="26"
+        VerticalAlignment="Center"
+        Click="OnMenuButtonClick"
+        Content="☰"
+        FontSize="14"
+        Style="{StaticResource SecondaryButtonStyle}"
+        ToolTip="메뉴"
+        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+        <Button.ContextMenu>
+            <ContextMenu x:Name="Menu">
+                <MenuItem Command="{Binding ShowVolumeCommand}" Header="데시벨 조정" />
+                <Separator />
+                <MenuItem Command="{Binding OpenSettingsCommand}" Header="설정" />
+            </ContextMenu>
+        </Button.ContextMenu>
+    </Button>
+</UserControl>

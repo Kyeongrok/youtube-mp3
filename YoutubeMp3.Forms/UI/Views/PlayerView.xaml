@@ -180,23 +180,10 @@
             Grid.Row="3"
             Margin="0,12,0,0"
             Orientation="Horizontal">
-            <Button
-                Width="96"
-                Height="36"
-                Command="{Binding PlayPauseCommand}"
-                Content="{Binding PlayPauseLabel}"
-                Style="{StaticResource AccentButtonStyle}" />
+            <!--  재생·정지는 타이틀바로 올렸다(어느 화면에서든 조작 가능)  -->
             <Button
                 Width="72"
                 Height="36"
-                Margin="8,0,0,0"
-                Command="{Binding StopCommand}"
-                Content="■ 정지"
-                Style="{StaticResource SecondaryButtonStyle}" />
-            <Button
-                Width="72"
-                Height="36"
-                Margin="8,0,0,0"
                 Command="{Binding PreviousCommand}"
                 Content="⏮ 이전"
                 Style="{StaticResource SecondaryButtonStyle}" />

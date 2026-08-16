@@ -18,20 +18,10 @@
         <Setter Property="MinHeight" Value="300" />
         <Setter Property="WindowStyle" Value="None" />
 
-        <!--  타이틀바 맨 왼쪽 햄버거 버튼 - 설정 창  -->
+        <!--  타이틀바 맨 왼쪽 햄버거 버튼 - 누르면 데시벨 조정·설정 메뉴가 열린다  -->
         <Setter Property="TitleBarLeftContent">
             <Setter.Value>
-                <Button
-                    Width="36"
-                    Height="26"
-                    Margin="6,0,0,0"
-                    VerticalAlignment="Center"
-                    Command="{Binding OpenSettingsCommand}"
-                    Content="☰"
-                    FontSize="14"
-                    Style="{StaticResource SecondaryButtonStyle}"
-                    ToolTip="설정"
-                    WindowChrome.IsHitTestVisibleInChrome="True" />
+                <views:AppMenuButton Margin="6,0,0,0" VerticalAlignment="Center" />
             </Setter.Value>
         </Setter>
 
@@ -56,24 +46,7 @@
                             </Style>
                         </Button.Style>
                     </Button>
-                    <Button
-                        Width="100"
-                        Height="26"
-                        Margin="8,0,0,0"
-                        VerticalAlignment="Center"
-                        Command="{Binding ShowVolumeCommand}"
-                        Content="데시벨 조정"
-                        WindowChrome.IsHitTestVisibleInChrome="True">
-                        <Button.Style>
-                            <Style BasedOn="{StaticResource SecondaryButtonStyle}" TargetType="Button">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsVolumeActive}" Value="True">
-                                        <Setter Property="Background" Value="#0078D4" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+                    <!--  데시벨 조정은 왼쪽 햄버거 메뉴로 옮겼다  -->
                     <Button
                         Width="90"
                         Height="26"
@@ -112,6 +85,25 @@
                             </Style>
                         </Button.Style>
                     </Button>
+                    <!--  재생 조작: 플레이어 화면이 아니어도 쓸 수 있도록 타이틀바에 둔다  -->
+                    <Button
+                        Width="96"
+                        Height="26"
+                        Margin="24,0,0,0"
+                        VerticalAlignment="Center"
+                        Command="{Binding Player.PlayPauseCommand}"
+                        Content="{Binding Player.PlayPauseLabel}"
+                        Style="{StaticResource AccentButtonStyle}"
+                        WindowChrome.IsHitTestVisibleInChrome="True" />
+                    <Button
+                        Width="72"
+                        Height="26"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center"
+                        Command="{Binding Player.StopCommand}"
+                        Content="■ 정지"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        WindowChrome.IsHitTestVisibleInChrome="True" />
                 </StackPanel>
             </Setter.Value>
         </Setter>

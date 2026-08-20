@@ -41,6 +41,27 @@ jobs:
           -p:PublishSingleFile=true
           -o publish-fd
 
+      # 재생목록 "편집" 메뉴가 띄우는 구간 잘라내기 도구. EditorPaths가 YoutubeMp3.exe와
+      # 같은 폴더에서 찾으므로 같은 -o 경로로 함께 퍼블리시한다.
+      - name: Publish editor (self-contained)
+        run: >
+          dotnet publish YoutubeMp3.Editor/YoutubeMp3.Editor.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish
+
+      - name: Publish editor (framework-dependent)
+        run: >
+          dotnet publish YoutubeMp3.Editor/YoutubeMp3.Editor.csproj
+          -c Release
+          -r win-x64
+          --self-contained false
+          -p:PublishSingleFile=true
+          -o publish-fd
+
       - name: Package
         shell: pwsh
         run: |

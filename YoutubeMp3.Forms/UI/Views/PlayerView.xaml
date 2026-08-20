@@ -83,6 +83,7 @@
             <ListBox.ContextMenu>
                 <ContextMenu>
                     <MenuItem Command="{Binding PlacementTarget.DataContext.AdjustSelectedVolumeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="볼륨 조정" />
+                    <MenuItem Command="{Binding PlacementTarget.DataContext.EditSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="편집(구간 잘라내기)" />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.RenameSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="파일명 변경" />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.RemoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="재생목록에서 제거" />
                     <Separator />

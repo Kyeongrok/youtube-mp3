@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -7,6 +8,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using YoutubeMp3.Forms.UI.Views;
+using YoutubeMp3.Main.Services;
 
 namespace YoutubeMp3.Forms.ViewModels;
 
@@ -479,6 +481,36 @@ public partial class PlayerViewModel : ObservableObject
 
         SavePlaylist();
         Status = $"파일명 변경됨 · {item.Name}";
+    }
+
+    /// <summary>선택한 곡을 외부 편집기(WpfMusicEditor.Trim)로 열어 파형에서 구간을 골라 잘라낼 수 있게 한다.</summary>
+    [RelayCommand]
+    private void EditSelectedFile()
+    {
+        if (SelectedItem is null)
+            return;
+
+        var editorExe = EditorPaths.FindEditorExe();
+        if (editorExe is null)
+        {
+            Status = "편집기(YoutubeMp3.Editor)를 찾을 수 없습니다. 먼저 빌드하세요.";
+            return;
+        }
+
+        try
+        {
+            // 재생 중인 곡이면 MediaPlayer가 파일을 잡고 있어 편집기에서 덮어쓰기가 실패할 수 있다. 먼저 재생을 끊는다.
+            ReleaseFile(SelectedItem.Path);
+            Process.Start(new ProcessStartInfo(editorExe, $"\"{SelectedItem.Path}\"")
+            {
+                UseShellExecute = false,
+            });
+            Status = $"편집기 실행 · {SelectedItem.Name}";
+        }
+        catch (Exception ex)
+        {
+            Status = $"편집기 실행 실패: {ex.Message}";
+        }
     }
 
     // 재생목록에서 제거하는 공통 처리(현재 곡이면 정지 + 강조 해제 + 저장 + 상태 표시).

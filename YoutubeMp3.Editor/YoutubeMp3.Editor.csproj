@@ -1,17 +1,38 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <OutputType>WinExe</OutputType>
         <TargetFramework>net8.0-windows</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <AssemblyName>YoutubeMp3.Editor</AssemblyName>
         <RootNamespace>YoutubeMp3.Editor</RootNamespace>
+        <NAudioLameVersion>2.1.0</NAudioLameVersion>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.*" />
         <PackageReference Include="NAudio" Version="2.2.1" />
-        <PackageReference Include="NAudio.Lame" Version="2.1.0" />
+        <PackageReference Include="NAudio.Lame" Version="$(NAudioLameVersion)" />
     </ItemGroup>
+
+    <ItemGroup>
+        <!--
+            NAudio.Lame은 네이티브 DLL을 단순 복사 항목(None)으로 넣어 주는데, 단일 exe 배포에서는
+            번들에 묶이지 않아 exe 옆에 남지 않는다. exe 하나만 받아 쓰는 경우에도 MP3 저장이
+            되도록 어셈블리에 함께 심어 둔다(꺼내 쓰는 쪽은 Audio/LameNative.cs).
+        -->
+        <EmbeddedResource Include="$(NuGetPackageRoot)naudio.lame\$(NAudioLameVersion)\build\libmp3lame.*.dll">
+            <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+    </ItemGroup>
+
+    <!--  심어 둔 사본만 쓰므로, NuGet이 출력 폴더에 따로 떨궈 두는 복사본은 지운다.  -->
+    <Target Name="RemoveLooseLameNativeLibs" BeforeTargets="AssignTargetPaths">
+        <Error
+            Condition="'@(EmbeddedResource)' == ''"
+            Text="libmp3lame 네이티브 DLL을 찾지 못했습니다: $(NuGetPackageRoot)naudio.lame\$(NAudioLameVersion)\build\libmp3lame.*.dll" />
+        <ItemGroup>
+            <None Remove="$(NuGetPackageRoot)naudio.lame\$(NAudioLameVersion)\build\libmp3lame.*.dll" />
+        </ItemGroup>
+    </Target>
 </Project>

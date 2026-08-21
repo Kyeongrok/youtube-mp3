@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\YoutubeMp3.Editor\YoutubeMp3.Editor.csproj" />
         <ProjectReference Include="..\YoutubeMp3.Main\YoutubeMp3.Main.csproj" />
         <ProjectReference Include="..\YoutubeMp3.Support\YoutubeMp3.Support.csproj" />
     </ItemGroup>

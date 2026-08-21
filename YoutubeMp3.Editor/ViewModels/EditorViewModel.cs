@@ -32,8 +32,8 @@ public partial class EditorViewModel : ObservableObject, IDisposable
         _cursorTimer.Tick += (_, _) => OnCursorTick();
     }
 
-    /// <summary>커맨드라인으로 넘어온 파일을 시작하자마자 연다.</summary>
-    public async Task LoadFromArgsAsync(string? path)
+    /// <summary>창을 띄운 쪽에서 지정한 파일을 열어 준다(재생목록에서 고른 곡).</summary>
+    public async Task LoadAsync(string? path)
     {
         if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
             await OpenFileAsync(path);

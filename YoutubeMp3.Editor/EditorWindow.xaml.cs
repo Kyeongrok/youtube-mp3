@@ -4,11 +4,12 @@ using YoutubeMp3.Editor.ViewModels;
 
 namespace YoutubeMp3.Editor;
 
-public partial class MainWindow : Window
+/// <summary>파형에서 구간을 골라 잘라내는 편집기 창. 재생목록의 "편집" 메뉴가 이 창을 띄운다.</summary>
+public partial class EditorWindow : Window
 {
     private readonly EditorViewModel _viewModel;
 
-    public MainWindow(EditorViewModel viewModel)
+    public EditorWindow(EditorViewModel viewModel)
     {
         InitializeComponent();
 

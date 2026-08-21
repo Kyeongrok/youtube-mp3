@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -7,6 +6,8 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using YoutubeMp3.Editor;
+using YoutubeMp3.Editor.ViewModels;
 using YoutubeMp3.Forms.UI.Views;
 using YoutubeMp3.Main.Services;
 
@@ -483,29 +484,26 @@ public partial class PlayerViewModel : ObservableObject
         Status = $"파일명 변경됨 · {item.Name}";
     }
 
-    /// <summary>선택한 곡을 외부 편집기(WpfMusicEditor.Trim)로 열어 파형에서 구간을 골라 잘라낼 수 있게 한다.</summary>
+    /// <summary>선택한 곡을 편집기 창으로 열어 파형에서 구간을 골라 잘라낼 수 있게 한다.
+    /// 편집기는 같은 프로세스 안의 창이라 별도 exe가 필요 없다(배포판에서도 그대로 동작한다).</summary>
     [RelayCommand]
-    private void EditSelectedFile()
+    private async Task EditSelectedFileAsync()
     {
         if (SelectedItem is null)
             return;
 
-        var editorExe = EditorPaths.FindEditorExe();
-        if (editorExe is null)
-        {
-            Status = "편집기(YoutubeMp3.Editor)를 찾을 수 없습니다. 먼저 빌드하세요.";
-            return;
-        }
-
+        var item = SelectedItem;
         try
         {
             // 재생 중인 곡이면 MediaPlayer가 파일을 잡고 있어 편집기에서 덮어쓰기가 실패할 수 있다. 먼저 재생을 끊는다.
-            ReleaseFile(SelectedItem.Path);
-            Process.Start(new ProcessStartInfo(editorExe, $"\"{SelectedItem.Path}\"")
-            {
-                UseShellExecute = false,
-            });
-            Status = $"편집기 실행 · {SelectedItem.Name}";
+            ReleaseFile(item.Path);
+
+            var editorViewModel = new EditorViewModel();
+            // 소유자를 두지 않아 본 창에 가려지지 않고, 본 창을 닫아도 편집 중인 내용이 날아가지 않는다.
+            new EditorWindow(editorViewModel).Show();
+            Status = $"편집기 열림 · {item.Name}";
+
+            await editorViewModel.LoadAsync(item.Path);
         }
         catch (Exception ex)
         {

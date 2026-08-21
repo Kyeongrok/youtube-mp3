@@ -109,6 +109,8 @@ public sealed class NAudioEditor : IAudioEditor
     private static void EncodeToMp3WithLame(IWaveProvider pcm, string outputPath,
         int bitrateBps, CancellationToken cancellationToken)
     {
+        LameNative.Ensure();
+
         var bitrateKbps = Math.Max(32, bitrateBps / 1000);
         using var writer = new LameMP3FileWriter(outputPath, pcm.WaveFormat, bitrateKbps);
 

@@ -1,4 +1,5 @@
 # YoutubeMp3
+<img width="1982" height="1388" alt="image" src="https://github.com/user-attachments/assets/aadf1afc-0113-49cb-9246-098ac0df664c" />
 
 YouTube 영상을 검색하고 MP3 오디오로 추출하는 Windows WPF 데스크톱 앱입니다.
 

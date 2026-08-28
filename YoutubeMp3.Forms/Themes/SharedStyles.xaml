@@ -196,6 +196,240 @@
         </Setter>
     </Style>
 
+    <!--
+        스크롤바: 평소엔 가는 선으로 접혀 있다가 마우스를 올리면 두꺼워진다.
+        키 없이 두어 SharedStyles를 머지한 화면의 모든 목록(재생목록·검색 결과 등)에 적용된다.
+    -->
+    <Style x:Key="ScrollBarPageButtonStyle" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <!--  트랙의 빈 곳을 눌러도 한 페이지씩 넘어가도록 투명 배경을 깔아 둔다  -->
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ScrollBarThumbStyle" TargetType="Thumb">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Background" Value="#5A5A5A" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border
+                        Background="{TemplateBinding Background}"
+                        CornerRadius="3"
+                        SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ScrollBar}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Width" Value="12" />
+        <Setter Property="MinWidth" Value="12" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ScrollBar}">
+                    <Grid Background="{TemplateBinding Background}">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource ScrollBarPageButtonStyle}" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb
+                                    x:Name="ThumbGrip"
+                                    Width="4"
+                                    HorizontalAlignment="Center"
+                                    Style="{StaticResource ScrollBarThumbStyle}" />
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageDownCommand" Style="{StaticResource ScrollBarPageButtonStyle}" />
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbGrip" Property="Background" Value="#8A8A8A" />
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="ThumbGrip"
+                                            Storyboard.TargetProperty="Width"
+                                            To="8"
+                                            Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="ThumbGrip"
+                                            Storyboard.TargetProperty="Width"
+                                            To="4"
+                                            Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <!--  가로 스크롤바도 같은 방식으로(두께는 높이로) 동작시킨다  -->
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Height" Value="12" />
+                <Setter Property="MinHeight" Value="12" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ScrollBar}">
+                            <Grid Background="{TemplateBinding Background}">
+                                <Track x:Name="PART_Track">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageLeftCommand" Style="{StaticResource ScrollBarPageButtonStyle}" />
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb
+                                            x:Name="ThumbGrip"
+                                            Height="4"
+                                            VerticalAlignment="Center"
+                                            Style="{StaticResource ScrollBarThumbStyle}" />
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageRightCommand" Style="{StaticResource ScrollBarPageButtonStyle}" />
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ThumbGrip" Property="Background" Value="#8A8A8A" />
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation
+                                                    Storyboard.TargetName="ThumbGrip"
+                                                    Storyboard.TargetProperty="Height"
+                                                    To="8"
+                                                    Duration="0:0:0.12" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation
+                                                    Storyboard.TargetName="ThumbGrip"
+                                                    Storyboard.TargetProperty="Height"
+                                                    To="4"
+                                                    Duration="0:0:0.12" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--
+        재생 진행바: 가는 둥근 트랙 + 지나온 구간은 강조색, 손잡이는 동그란 점.
+        키 없이 두어 SharedStyles를 머지한 화면의 Slider에 적용된다.
+    -->
+    <Style x:Key="SliderFilledTrackStyle" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <!--  트랙 위 아무 곳이나 눌러도 반응하도록 투명 영역을 위아래로 넉넉히 둔다  -->
+                    <Border Background="Transparent">
+                        <Border
+                            Height="4"
+                            VerticalAlignment="Center"
+                            Background="#0078D4"
+                            CornerRadius="2" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style
+        x:Key="SliderEmptyTrackStyle"
+        BasedOn="{StaticResource SliderFilledTrackStyle}"
+        TargetType="RepeatButton">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent">
+                        <Border
+                            Height="4"
+                            VerticalAlignment="Center"
+                            Background="#3C3C3C"
+                            CornerRadius="2" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SliderThumbStyle" TargetType="Thumb">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Width" Value="14" />
+        <Setter Property="Height" Value="14" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Ellipse x:Name="Knob" Fill="#0078D4" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Knob" Property="Fill" Value="#4CC2FF" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Knob" Property="Fill" Value="#4CC2FF" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type Slider}">
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Slider}">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource SliderFilledTrackStyle}" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource SliderThumbStyle}" />
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource SliderEmptyTrackStyle}" />
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="Separator">
         <Setter Property="Height" Value="1" />
         <Setter Property="Margin" Value="10,4" />

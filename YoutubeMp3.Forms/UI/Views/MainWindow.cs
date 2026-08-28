@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using YoutubeMp3.Forms.ViewModels;
 using YoutubeMp3.Support.UI.Units;
@@ -24,7 +24,8 @@ public class MainWindow : YoutubeMp3Window
         DataContext = viewModel;
         _settings = settings;
 
-        // 타이틀바에 릴리즈 버전을 표시한다(YoutubeMp3.csproj의 <Version>).
+        // 작업 표시줄·Alt+Tab에 릴리즈 버전을 표시한다(YoutubeMp3.csproj의 <Version>).
+        // 타이틀바 텍스트는 감춰 두고, 같은 문구를 햄버거 메뉴 맨 위에 보여 준다(AppMenuButton).
         var version = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version;
         if (version is not null)
             Title = $"YoutubeMp3 v{version.ToString(3)}";

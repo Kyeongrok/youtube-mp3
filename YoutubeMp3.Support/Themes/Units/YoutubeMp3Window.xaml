@@ -43,7 +43,17 @@
                                         VerticalAlignment="Center"
                                         FontSize="13"
                                         Foreground="#CCCCCC"
-                                        Text="{TemplateBinding Title}" />
+                                        Text="{TemplateBinding Title}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ShowTitleText, RelativeSource={RelativeSource AncestorType=units:YoutubeMp3Window}}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                                 <!--  앱별 타이틀바 콘텐츠(가운데)  -->
                                 <ContentPresenter

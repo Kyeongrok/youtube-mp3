@@ -26,7 +26,16 @@
         shell:WindowChrome.IsHitTestVisibleInChrome="True">
         <Button.ContextMenu>
             <ContextMenu x:Name="Menu">
+                <!--  앱 이름·버전 (클릭 대상이 아니라 표시용)  -->
+                <MenuItem
+                    x:Name="AppInfoHeader"
+                    FontSize="12"
+                    Foreground="#888888"
+                    IsHitTestVisible="False" />
+                <Separator />
                 <MenuItem Command="{Binding ShowVolumeCommand}" Header="데시벨 조정" />
+                <!--  같은 Wi-Fi의 휴대폰으로 mp3를 QR 코드로 전송  -->
+                <MenuItem Command="{Binding ShowFileTransferCommand}" Header="📱 폰으로 전송" />
                 <Separator />
                 <MenuItem Command="{Binding OpenSettingsCommand}" Header="설정" />
             </ContextMenu>

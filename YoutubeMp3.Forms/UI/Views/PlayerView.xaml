@@ -155,6 +155,7 @@
                     <MenuItem Command="{Binding PlacementTarget.DataContext.AdjustSelectedVolumeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="볼륨 조정" />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.EditSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="편집(구간 잘라내기)" />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.RenameSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="파일명 변경" />
+                    <MenuItem Command="{Binding PlacementTarget.DataContext.SendSelectedToPhoneCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="휴대폰 전송" />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.RemoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="재생목록에서 제거" />
                     <Separator />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.DeleteSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="파일 삭제(디스크에서 삭제)" />

@@ -79,8 +79,14 @@ public partial class PlayerViewModel : ObservableObject
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "YoutubeMp3", "repeatmode.txt");
 
+    private readonly IFileTransferService _fileTransferService;
     private readonly MediaPlayer _player = new();
     private readonly DispatcherTimer _timer;
+
+    // 컨텍스트 메뉴 "휴대폰 전송"으로 띄운 서버와 QR 창. 같은 곡을 다시 고르면 서버를 그대로 재사용한다.
+    private FileTransferSession? _phoneSession;
+    private string? _phoneSessionPath;
+    private PhoneTransferWindow? _phoneWindow;
     private readonly Random _random = new();
     private PlaylistItem? _current;
     private bool _suppressSeek;
@@ -95,8 +101,10 @@ public partial class PlayerViewModel : ObservableObject
     /// PlayerViewModel은 볼륨 조절 화면을 모르므로, 화면 전환은 이 이벤트를 구독하는 MainWindowViewModel이 맡는다.</summary>
     public event Action<string>? VolumeAdjustRequested;
 
-    public PlayerViewModel()
+    public PlayerViewModel(IFileTransferService fileTransferService)
     {
+        _fileTransferService = fileTransferService;
+
         _player.MediaOpened += OnMediaOpened;
         _player.MediaEnded += (_, _) => AdvanceOnMediaEnded();
 
@@ -508,6 +516,56 @@ public partial class PlayerViewModel : ObservableObject
         catch (Exception ex)
         {
             Status = $"편집기 실행 실패: {ex.Message}";
+        }
+    }
+
+    /// <summary>선택한 곡을 같은 Wi-Fi의 휴대폰으로 받을 수 있게 QR 창을 바로 띄운다.
+    /// 그 곡의 전송 서버가 이미 떠 있으면 재사용하고, 없으면(또는 다른 곡이면) 새로 띄운다.</summary>
+    [RelayCommand]
+    private void SendSelectedToPhone()
+    {
+        if (SelectedItem is null)
+            return;
+
+        var item = SelectedItem;
+        try
+        {
+            var address = _fileTransferService.GetLocalAddresses().FirstOrDefault();
+            if (address is null)
+            {
+                Status = "Wi-Fi/LAN에 연결되어 있지 않습니다";
+                return;
+            }
+
+            if (_phoneSession is null ||
+                !string.Equals(_phoneSessionPath, item.Path, StringComparison.OrdinalIgnoreCase))
+            {
+                _phoneSession?.Dispose();
+                _phoneSession = null;
+                _phoneSession = _fileTransferService.Start(item.Path);
+                _phoneSessionPath = item.Path;
+            }
+
+            var url = $"http://{address}:{_phoneSession.Port}/{Uri.EscapeDataString(_phoneSession.FileName)}";
+
+            if (_phoneWindow is null)
+            {
+                _phoneWindow = new PhoneTransferWindow { Owner = Application.Current.MainWindow };
+                _phoneWindow.Closed += (_, _) => _phoneWindow = null;
+                _phoneWindow.SetContent(item.Name, url, FileTransferViewModel.BuildQrImage(url));
+                _phoneWindow.Show();
+            }
+            else
+            {
+                _phoneWindow.SetContent(item.Name, url, FileTransferViewModel.BuildQrImage(url));
+                _phoneWindow.Activate();
+            }
+
+            Status = $"휴대폰 전송 준비됨 · {item.Name}";
+        }
+        catch (Exception ex)
+        {
+            Status = $"휴대폰 전송 준비 실패: {ex.Message}";
         }
     }
 

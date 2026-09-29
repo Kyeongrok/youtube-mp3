@@ -152,7 +152,7 @@ public partial class FileTransferViewModel : ObservableObject
         return zipPath;
     }
 
-    private static DrawingImage BuildQrImage(string url)
+    internal static DrawingImage BuildQrImage(string url)
     {
         using var generator = new QRCodeGenerator();
         var data = generator.CreateQrCode(url, QRCodeGenerator.ECCLevel.M);

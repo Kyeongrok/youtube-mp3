@@ -16,6 +16,9 @@ public static class ToolPaths
 
     public static string YtDlp => Path.Combine(ToolsDirectory, "yt-dlp.exe");
 
+    /// <summary>yt-dlp 새 버전을 마지막으로 확인한 때를 수정 시각으로 남기는 빈 파일.</summary>
+    public static string YtDlpUpdateStamp => Path.Combine(ToolsDirectory, "yt-dlp.lastupdatecheck");
+
     public static string FFmpeg => Path.Combine(ToolsDirectory, "ffmpeg.exe");
 
     public static string Deno => Path.Combine(ToolsDirectory, "deno.exe");

@@ -57,7 +57,7 @@ public partial class MainWindowViewModel : ObservableObject
             });
             await _youtubeService.PrepareBinariesAsync(progress);
 
-            // 실제로 내려받은 경우에만 상태 문구를 마무리한다(이미 있으면 조용히 넘어간다).
+            // 실제로 내려받거나 yt-dlp 새 버전을 확인한 경우에만 상태 문구를 마무리한다(할 일이 없으면 조용히 넘어간다).
             if (downloadStarted)
                 Status = "준비 완료";
         }

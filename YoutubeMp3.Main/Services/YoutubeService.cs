@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using YoutubeDLSharp;
@@ -7,6 +8,9 @@ namespace YoutubeMp3.Main.Services;
 
 public sealed class YoutubeService : IYoutubeService
 {
+    private static readonly TimeSpan YtDlpUpdateCheckInterval = TimeSpan.FromDays(7);
+    private static readonly TimeSpan YtDlpUpdateTimeout = TimeSpan.FromMinutes(3);
+
     private readonly YoutubeDL _youtubeDl;
     private readonly string _binaryDirectory;
     private readonly SemaphoreSlim _binaryPreparationLock = new(1, 1);
@@ -125,6 +129,12 @@ public sealed class YoutubeService : IYoutubeService
             {
                 progress?.Report(new AudioDownloadProgress(0, "필수 프로그램(yt-dlp, FFmpeg, Deno) 다운로드 중... (최초 1회)"));
                 await Utils.DownloadBinaries(skipExisting: true, directoryPath: _binaryDirectory, downloadJSRuntime: true);
+                MarkYtDlpUpdateChecked();
+            }
+            else if (IsYtDlpUpdateCheckDue())
+            {
+                progress?.Report(new AudioDownloadProgress(0, "yt-dlp 새 버전 확인 중..."));
+                await UpdateYtDlpAsync();
             }
 
             _binariesReady = true;
@@ -139,6 +149,59 @@ public sealed class YoutubeService : IYoutubeService
         File.Exists(_youtubeDl.YoutubeDLPath) &&
         File.Exists(_youtubeDl.FFmpegPath) &&
         File.Exists(ToolPaths.Deno);
+
+    private static bool IsYtDlpUpdateCheckDue()
+    {
+        var stamp = new FileInfo(ToolPaths.YtDlpUpdateStamp);
+        return !stamp.Exists || DateTime.UtcNow - stamp.LastWriteTimeUtc >= YtDlpUpdateCheckInterval;
+    }
+
+    private static void MarkYtDlpUpdateChecked()
+    {
+        try
+        {
+            File.WriteAllBytes(ToolPaths.YtDlpUpdateStamp, []);
+        }
+        catch
+        {
+            // 기록하지 못하면 다음 실행 때 한 번 더 확인할 뿐이다.
+        }
+    }
+
+    // YouTube가 자주 바뀌어 yt-dlp가 오래되면 403 등으로 다운로드가 막힌다. yt-dlp 자체 업데이트(-U)로
+    // 새 버전이 있을 때만 exe를 바꿔 둔다. 실패(오프라인 등)해도 지금 있는 버전으로 계속 쓰고,
+    // 확인 시각을 남기지 않아 다음 실행 때 다시 시도한다.
+    private async Task UpdateYtDlpAsync()
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo(_youtubeDl.YoutubeDLPath, "-U")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+
+            using var timeout = new CancellationTokenSource(YtDlpUpdateTimeout);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                return;
+            }
+
+            if (process.ExitCode == 0)
+                MarkYtDlpUpdateChecked();
+        }
+        catch
+        {
+        }
+    }
 
     private static string FormatDuration(float? seconds)
     {

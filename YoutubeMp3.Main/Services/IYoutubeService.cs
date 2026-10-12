@@ -12,6 +12,7 @@ public interface IYoutubeService
 
     /// <summary>
     /// 필수 실행 파일(yt-dlp, FFmpeg, Deno)이 없으면 내려받아 둔다. 이미 있으면 즉시 반환한다.
+    /// yt-dlp는 마지막 확인 후 1주일이 지났으면 새 버전을 확인해 있으면 교체한다.
     /// 앱 시작 시 백그라운드로 호출해 두면 검색·다운로드·볼륨 조절이 곧바로 동작한다.
     /// </summary>
     Task PrepareBinariesAsync(

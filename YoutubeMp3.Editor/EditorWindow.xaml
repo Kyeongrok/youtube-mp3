@@ -77,7 +77,7 @@
                 <Run Text="재생 위치: " />
                 <Run Text="{Binding PlayPositionLabel, Mode=OneWay}" />
                 <Run Text=" / " />
-                <Run Text="{Binding DurationSeconds, Mode=OneWay, StringFormat={}{0:0.00}}" />
+                <Run Text="{Binding DurationLabel, Mode=OneWay}" />
             </TextBlock>
         </DockPanel>
 

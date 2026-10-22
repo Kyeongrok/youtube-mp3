@@ -43,6 +43,7 @@ public partial class EditorViewModel : ObservableObject, IDisposable
     private string _fileName = "(열린 파일 없음)";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DurationLabel))]
     private double _durationSeconds;
 
     [ObservableProperty]
@@ -105,6 +106,9 @@ public partial class EditorViewModel : ObservableObject, IDisposable
 
     /// <summary>재생 커서(노란 선)가 지나가는 위치를 분:초.소수로 표시한다.</summary>
     public string PlayPositionLabel => FormatTime(PlayPositionSeconds);
+
+    /// <summary>곡 전체 길이를 HH:MM:SS로 표시한다(예: 3508.61초 → 00:58:28).</summary>
+    public string DurationLabel => TimeSpan.FromSeconds(Math.Max(0, DurationSeconds)).ToString(@"hh\:mm\:ss");
 
     private static string FormatTime(double totalSeconds)
     {

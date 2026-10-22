@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -628,6 +629,25 @@ public partial class PlayerViewModel : ObservableObject
     }
 
     /// <summary>선택한 곡의 볼륨을 조절하러 볼륨 조절 화면으로 이동을 요청한다.</summary>
+    /// <summary>탐색기에서 선택한 곡이 있는 폴더를 열고 그 파일을 선택해 둔다.</summary>
+    [RelayCommand]
+    private void OpenSelectedFileLocation()
+    {
+        if (SelectedItem is null)
+            return;
+
+        if (!File.Exists(SelectedItem.Path))
+        {
+            Status = "파일이 디스크에 없습니다";
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{SelectedItem.Path}\"")
+        {
+            UseShellExecute = true,
+        });
+    }
+
     [RelayCommand]
     private void AdjustSelectedVolume()
     {

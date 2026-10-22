@@ -93,6 +93,7 @@
                 Command="{Binding ExportCommand}"
                 Content="💾 저장"
                 FontWeight="Bold" />
+            <Button Command="{Binding ExportSelectionCommand}" Content="💾 선택 구간 저장" />
         </StackPanel>
     </Grid>
 </Window>

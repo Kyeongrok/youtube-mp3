@@ -48,6 +48,7 @@ public partial class EditorViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CutCommand))]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportSelectionCommand))]
     [NotifyPropertyChangedFor(nameof(StartTimeLabel))]
     [NotifyPropertyChangedFor(nameof(EndTimeLabel))]
     [NotifyPropertyChangedFor(nameof(SelectionLabel))]
@@ -56,6 +57,7 @@ public partial class EditorViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CutCommand))]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportSelectionCommand))]
     [NotifyPropertyChangedFor(nameof(StartTimeLabel))]
     [NotifyPropertyChangedFor(nameof(EndTimeLabel))]
     [NotifyPropertyChangedFor(nameof(SelectionLabel))]
@@ -66,6 +68,7 @@ public partial class EditorViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(CutCommand))]
     [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportSelectionCommand))]
     [NotifyCanExecuteChangedFor(nameof(PlayPauseCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     private bool _isBusy;
@@ -236,6 +239,7 @@ public partial class EditorViewModel : ObservableObject, IDisposable
         CutCommand.NotifyCanExecuteChanged();
         UndoCommand.NotifyCanExecuteChanged();
         ExportCommand.NotifyCanExecuteChanged();
+        ExportSelectionCommand.NotifyCanExecuteChanged();
         PlayPauseCommand.NotifyCanExecuteChanged();
         StopCommand.NotifyCanExecuteChanged();
     }
@@ -304,15 +308,30 @@ public partial class EditorViewModel : ObservableObject, IDisposable
     private bool CanExport() => !IsBusy && HasDocument;
 
     [RelayCommand(CanExecute = nameof(CanExport))]
-    private async Task ExportAsync()
+    private Task ExportAsync()
+        => SaveAsync(_document!, "잘라낸 파일 저장", Path.GetFileName(_filePath) ?? "trimmed.m4a");
+
+    private bool CanExportSelection() => !IsBusy && HasDocument && EndSeconds > StartSeconds;
+
+    /// <summary>선택한 구간만 새 파일로 저장한다. 편집 중인 문서는 건드리지 않는다.</summary>
+    [RelayCommand(CanExecute = nameof(CanExportSelection))]
+    private Task ExportSelectionAsync()
+    {
+        var selection = _document!.Slice(TimeSpan.FromSeconds(StartSeconds), TimeSpan.FromSeconds(EndSeconds));
+        var name = Path.GetFileNameWithoutExtension(_filePath) ?? "selection";
+        var extension = Path.GetExtension(_filePath) ?? ".m4a";
+        return SaveAsync(selection, "선택 구간 저장", $"{name} (구간){extension}");
+    }
+
+    private async Task SaveAsync(AudioDocument document, string title, string fileName)
     {
         var defaultFormat = AudioFormatExtensions.FromExtension(Path.GetExtension(_filePath ?? ""));
         var dialog = new SaveFileDialog
         {
-            Title = "잘라낸 파일 저장",
+            Title = title,
             Filter = "AAC 오디오 (*.m4a)|*.m4a|MP3 오디오 (*.mp3)|*.mp3|WAV 오디오 (*.wav)|*.wav",
             FilterIndex = defaultFormat switch { AudioFormat.Mp3 => 2, AudioFormat.Wav => 3, _ => 1 },
-            FileName = Path.GetFileName(_filePath) ?? "trimmed.m4a",
+            FileName = fileName,
             InitialDirectory = Path.GetDirectoryName(_filePath),
         };
         if (dialog.ShowDialog() != true)
@@ -334,8 +353,8 @@ public partial class EditorViewModel : ObservableObject, IDisposable
             _cursorTimer.Stop();
             IsPlaying = false;
 
-            await _editor.ExportAsync(_document!, dialog.FileName, format);
-            Status = $"저장 완료: {Path.GetFileName(dialog.FileName)}";
+            await _editor.ExportAsync(document, dialog.FileName, format);
+            Status = $"저장 완료: {Path.GetFileName(dialog.FileName)} · {document.Duration.TotalSeconds:0.##}초";
         }
         catch (Exception ex)
         {

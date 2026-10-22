@@ -50,6 +50,17 @@ public sealed class AudioDocument
         _samples = result;
     }
 
+    /// <summary>[start, end) 구간만 복사해 새 문서로 만든다(원본은 그대로). 선택 구간 저장에 사용한다.</summary>
+    public AudioDocument Slice(TimeSpan start, TimeSpan end)
+    {
+        var startIdx = ClampFrame(start) * Channels;
+        var endIdx = Math.Max(ClampFrame(end) * Channels, startIdx);
+
+        var slice = new float[endIdx - startIdx];
+        Array.Copy(_samples, startIdx, slice, 0, slice.Length);
+        return new AudioDocument(SampleRate, Channels, slice);
+    }
+
     /// <summary>마지막 편집(Cut)을 되돌린다.</summary>
     public void Undo()
     {

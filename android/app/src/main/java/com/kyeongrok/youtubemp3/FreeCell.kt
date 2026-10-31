@@ -58,10 +58,24 @@ data class FreeCellGame(
     private fun isRun(column: Int, row: Int) =
         cascades[column].drop(row).zipWithNext().all { (upper, lower) -> lower.canStackOn(upper) }
 
-    private fun moveToCascade(pick: FreeCellPick, column: Int): FreeCellGame? {
-        if (pick is FreeCellPick.Cascade && pick.column == column) return null
-        val cards = cardsOf(pick)
+    /** 줄의 어느 카드를 골랐든 그 줄 끝에서 위로 올라가며 목적지에 맞는 카드를 찾는다. */
+    private fun fittingPick(pick: FreeCellPick.Cascade, top: PlayingCard): FreeCellPick? {
+        val source = cascades[pick.column]
+        var row = source.lastIndex
+        while (row >= 0) {
+            if (source[row].canStackOn(top)) return pick.copy(row = row)
+            if (row == 0 || !source[row].canStackOn(source[row - 1])) return null
+            row--
+        }
+        return null
+    }
+
+    private fun moveToCascade(picked: FreeCellPick, column: Int): FreeCellGame? {
+        if (picked is FreeCellPick.Cascade && picked.column == column) return null
         val top = cascades[column].lastOrNull()
+        val pick = if (picked is FreeCellPick.Cascade && top != null) fittingPick(picked, top) else picked
+        if (pick == null) return null
+        val cards = cardsOf(pick)
         if (top != null && !cards[0].canStackOn(top)) return null
         // 여러 장은 빈 칸을 거쳐 옮기는 것과 같아서 빈 자리 수만큼만 움직일 수 있다.
         val emptyCascades = cascades.indices.count { it != column && cascades[it].isEmpty() }

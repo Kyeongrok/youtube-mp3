@@ -120,7 +120,10 @@ fun ShanghaiScreen(viewModel: MainViewModel) {
                 viewModel.tickShanghai()
             }
         }
-        onPauseOrDispose { timer.cancel() }
+        onPauseOrDispose {
+            timer.cancel()
+            viewModel.saveShanghai()
+        }
     }
 
     val game = current

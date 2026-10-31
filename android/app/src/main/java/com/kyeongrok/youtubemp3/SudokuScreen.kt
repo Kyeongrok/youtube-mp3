@@ -122,7 +122,10 @@ fun SudokuScreen(viewModel: MainViewModel) {
                 viewModel.tickSudoku()
             }
         }
-        onPauseOrDispose { timer.cancel() }
+        onPauseOrDispose {
+            timer.cancel()
+            viewModel.saveSudoku()
+        }
     }
 
     val game = current

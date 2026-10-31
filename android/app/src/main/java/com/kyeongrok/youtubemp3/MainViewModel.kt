@@ -38,29 +38,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableColorTheme = MutableStateFlow(AppSettings.loadColor(application))
     val colorTheme = mutableColorTheme.asStateFlow()
 
-    private val mutableSudoku = MutableStateFlow<SudokuGame?>(null)
+    private val mutableSudoku = MutableStateFlow(SavedGames.loadSudoku(application))
     val sudoku = mutableSudoku.asStateFlow()
 
     private val mutableSudokuRecords = MutableStateFlow(SudokuRecords.load(application))
     val sudokuRecords = mutableSudokuRecords.asStateFlow()
 
-    // 판이 매초 다시 그려지지 않도록 게임 상태와 따로 세고, 끝날 때 게임에 옮긴다.
-    private var sudokuSeconds = 0
+    // 판이 매초 다시 그려지지 않도록 게임 상태와 따로 세고, 저장하거나 끝날 때 게임에 옮긴다.
+    private var sudokuSeconds = mutableSudoku.value?.seconds ?: 0
 
-    private val mutableShanghai = MutableStateFlow<ShanghaiGame?>(null)
+    private val mutableShanghai = MutableStateFlow(SavedGames.loadShanghai(application))
     val shanghai = mutableShanghai.asStateFlow()
 
     private val mutableShanghaiRecords = MutableStateFlow(ShanghaiRecords.load(application))
     val shanghaiRecords = mutableShanghaiRecords.asStateFlow()
 
-    private var shanghaiSeconds = 0
+    private var shanghaiSeconds = mutableShanghai.value?.seconds ?: 0
 
-    private val mutableFreeCell = MutableStateFlow<FreeCellGame?>(null)
+    private val mutableFreeCell = MutableStateFlow(SavedGames.loadFreeCell(application))
     val freeCell = mutableFreeCell.asStateFlow()
 
     private var lastCardTap = 0L
 
-    private val mutableDeviceTracks =MutableStateFlow<List<Track>>(emptyList())
+    private val mutableDeviceTracks = MutableStateFlow<List<Track>>(emptyList())
     val deviceTracks = mutableDeviceTracks.asStateFlow()
 
     private val mutablePlaylists = MutableStateFlow(Playlists.load(application))
@@ -200,11 +200,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             mutableSudoku.value = withContext(Dispatchers.Default) { Sudoku.generate(level) }
             sudokuSeconds = 0
+            saveSudoku()
         }
     }
 
     fun tickSudoku() {
         if (mutableSudoku.value?.isComplete == false) sudokuSeconds++
+    }
+
+    fun saveSudoku() {
+        mutableSudoku.value?.let { SavedGames.saveSudoku(getApplication(), it.copy(seconds = sudokuSeconds)) }
     }
 
     fun enterSudoku(index: Int, digit: Int) {
@@ -218,18 +223,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             mutableSudoku.value = next
         }
+        saveSudoku()
     }
 
     fun toggleSudokuNote(index: Int, digit: Int) {
         mutableSudoku.value = mutableSudoku.value?.toggleNote(index, digit)
+        saveSudoku()
     }
 
     fun newFreeCell() {
-        mutableFreeCell.value = FreeCellGame.deal()
+        val game = FreeCellGame.deal()
+        mutableFreeCell.value = game
+        SavedGames.saveFreeCell(getApplication(), game)
     }
 
     fun undoFreeCell() {
-        mutableFreeCell.value = mutableFreeCell.value?.undo()
+        updateFreeCell(mutableFreeCell.value?.undo())
+    }
+
+    /** 카드를 고르기만 한 탭은 저장하지 않는다. */
+    private fun updateFreeCell(next: FreeCellGame?) {
+        val moved = next?.previous !== mutableFreeCell.value?.previous
+        mutableFreeCell.value = next
+        if (next != null && moved) SavedGames.saveFreeCell(getApplication(), next)
     }
 
     /** 첫 탭은 바로 카드를 고르고, 이어서 같은 끝 카드를 누르면 빈 프리셀로 옮긴다. */
@@ -240,26 +256,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             game.picked == FreeCellPick.Cascade(column, row) && now - lastCardTap < DOUBLE_TAP_MILLIS
         val emptyCell = game.cells.indexOf(null)
         lastCardTap = now
-        mutableFreeCell.value = if (doubleTap && emptyCell >= 0) game.tapCell(emptyCell) else game.tapCascade(column, row)
+        updateFreeCell(if (doubleTap && emptyCell >= 0) game.tapCell(emptyCell) else game.tapCascade(column, row))
     }
 
     fun tapFreeCellSpot(index: Int) {
-        mutableFreeCell.value = mutableFreeCell.value?.tapCell(index)
+        updateFreeCell(mutableFreeCell.value?.tapCell(index))
     }
 
     fun tapFreeCellFoundation() {
-        mutableFreeCell.value = mutableFreeCell.value?.tapFoundation()
+        updateFreeCell(mutableFreeCell.value?.tapFoundation())
     }
 
     fun newShanghai() {
         viewModelScope.launch {
             mutableShanghai.value = withContext(Dispatchers.Default) { Shanghai.generate() }
             shanghaiSeconds = 0
+            saveShanghai()
         }
     }
 
     fun tickShanghai() {
         if (mutableShanghai.value?.isComplete == false) shanghaiSeconds++
+    }
+
+    fun saveShanghai() {
+        mutableShanghai.value?.let { SavedGames.saveShanghai(getApplication(), it.copy(seconds = shanghaiSeconds)) }
     }
 
     fun pickShanghai(index: Int) {
@@ -273,6 +294,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             mutableShanghai.value = next
         }
+        if (next.faces !== game.faces) saveShanghai()
     }
 
     fun showShanghaiHint() {
@@ -285,6 +307,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val shuffled = withContext(Dispatchers.Default) { game.shuffled() }
             if (shuffled != null) {
                 mutableShanghai.value = shuffled
+                saveShanghai()
             } else {
                 Toast.makeText(getApplication(), "남은 패로는 풀 수 없습니다. 새 게임을 시작해 주세요.", Toast.LENGTH_LONG).show()
             }

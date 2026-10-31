@@ -7,15 +7,39 @@ enum class SudokuLevel(val label: String, val blanks: Int) {
 }
 
 /** 칸은 왼쪽 위부터 0..80이고 빈칸은 0이다. */
-data class SudokuGame(val level: SudokuLevel, val puzzle: List<Int>, val cells: List<Int>) {
+data class SudokuGame(
+    val level: SudokuLevel,
+    val puzzle: List<Int>,
+    val cells: List<Int>,
+    val notes: List<Set<Int>> = List(puzzle.size) { emptySet() },
+) {
     val conflicts: Set<Int> = Sudoku.findConflicts(cells)
     val isComplete = 0 !in cells && conflicts.isEmpty()
 
     fun isGiven(index: Int) = puzzle[index] != 0
 
-    fun enter(index: Int, digit: Int) =
-        if (isGiven(index) || isComplete) this
-        else copy(cells = cells.toMutableList().also { it[index] = digit })
+    /** 숫자를 넣으면 그 칸의 메모와 같은 줄·칸·박스에 적힌 같은 숫자 메모를 지운다. 0은 칸을 비운다. */
+    fun enter(index: Int, digit: Int): SudokuGame {
+        if (isGiven(index) || isComplete) return this
+        return copy(
+            cells = cells.toMutableList().also { it[index] = digit },
+            notes = notes.mapIndexed { other, note ->
+                when {
+                    other == index -> emptySet()
+                    digit != 0 && Sudoku.arePeers(index, other) -> note - digit
+                    else -> note
+                }
+            },
+        )
+    }
+
+    fun toggleNote(index: Int, digit: Int): SudokuGame {
+        if (isGiven(index) || isComplete || cells[index] != 0) return this
+        val note = notes[index]
+        return copy(
+            notes = notes.toMutableList().also { it[index] = if (digit in note) note - digit else note + digit },
+        )
+    }
 }
 
 object Sudoku {

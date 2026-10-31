@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    val quality = MutableStateFlow(QUALITIES.first())
+    val quality = MutableStateFlow(DEFAULT_QUALITY)
 
     private val mutableResults = MutableStateFlow<List<VideoSearchResult>>(emptyList())
     val results = mutableResults.asStateFlow()
@@ -31,10 +31,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableUpdateProgress = MutableStateFlow<Float?>(null)
     val updateProgress = mutableUpdateProgress.asStateFlow()
 
+    private val mutableThemeMode = MutableStateFlow(AppSettings.loadTheme(application))
+    val themeMode = mutableThemeMode.asStateFlow()
+
+    private val mutableColorTheme = MutableStateFlow(AppSettings.loadColor(application))
+    val colorTheme = mutableColorTheme.asStateFlow()
+
     private val mutableSudoku = MutableStateFlow<SudokuGame?>(null)
     val sudoku = mutableSudoku.asStateFlow()
 
-    private val mutableDeviceTracks = MutableStateFlow<List<Track>>(emptyList())
+    private val mutableShanghai = MutableStateFlow<ShanghaiGame?>(null)
+    val shanghai = mutableShanghai.asStateFlow()
+
+    private val mutableDeviceTracks =MutableStateFlow<List<Track>>(emptyList())
     val deviceTracks = mutableDeviceTracks.asStateFlow()
 
     private val mutablePlaylists = MutableStateFlow(Playlists.load(application))
@@ -48,6 +57,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch { mutableUpdate.value = AppUpdate.findNewerRelease() }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        mutableThemeMode.value = mode
+        AppSettings.saveTheme(getApplication(), mode)
+    }
+
+    fun setColorTheme(color: ColorTheme) {
+        mutableColorTheme.value = color
+        AppSettings.saveColor(getApplication(), color)
     }
 
     fun installUpdate() {
@@ -102,7 +121,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun delete(track: Track) {
         Player.stopIfPlaying(track)
         Library.delete(getApplication(), track)
+        forgetTrack(track)
+    }
+
+    /** 파일이 이미 지워진 곡을 플레이어와 목록에서 뺀다. */
+    fun forgetTrack(track: Track) {
+        Player.stopIfPlaying(track)
         refreshTracks()
+        refreshDeviceTracks()
+        savePlaylists(mutablePlaylists.value.map { it.copy(trackIds = it.trackIds - track.id) })
     }
 
     fun createPlaylist(name: String): Long {
@@ -119,7 +146,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun choosePlaylistTracks(id: Long, selected: Set<Long>) {
         val visible = mutableDeviceTracks.value.map { it.id }.toSet()
         updatePlaylistTracks(id) { ids ->
-            ids.filter { it !in visible || it in selected } + (selected - ids.toSet())
+            ids.filter { it !in visible || it in selected } + (selected.filter(visible::contains) - ids.toSet())
         }
     }
 
@@ -162,8 +189,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mutableSudoku.value = mutableSudoku.value?.enter(index, digit)
     }
 
+    fun toggleSudokuNote(index: Int, digit: Int) {
+        mutableSudoku.value = mutableSudoku.value?.toggleNote(index, digit)
+    }
+
+    fun newShanghai() {
+        viewModelScope.launch {
+            mutableShanghai.value = withContext(Dispatchers.Default) { Shanghai.generate() }
+        }
+    }
+
+    fun pickShanghai(index: Int) {
+        mutableShanghai.value = mutableShanghai.value?.pick(index)
+    }
+
+    fun showShanghaiHint() {
+        mutableShanghai.value = mutableShanghai.value?.showHint()
+    }
+
+    fun shuffleShanghai() {
+        val game = mutableShanghai.value ?: return
+        viewModelScope.launch {
+            val shuffled = withContext(Dispatchers.Default) { game.shuffled() }
+            if (shuffled != null) {
+                mutableShanghai.value = shuffled
+            } else {
+                Toast.makeText(getApplication(), "남은 패로는 풀 수 없습니다. 새 게임을 시작해 주세요.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     companion object {
         val QUALITIES = listOf("320K", "192K", "128K")
+        private const val DEFAULT_QUALITY = "192K"
 
         private val URL_PATTERN = Regex("""https?://\S+""")
 

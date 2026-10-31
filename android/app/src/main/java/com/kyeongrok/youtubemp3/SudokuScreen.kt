@@ -21,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,6 +81,7 @@ fun SudokuTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
 fun SudokuScreen(viewModel: MainViewModel) {
     val current by viewModel.sudoku.collectAsStateWithLifecycle()
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
+    var noteMode by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (current == null) viewModel.newSudoku(SudokuLevel.Medium) }
 
     val game = current
@@ -92,7 +95,7 @@ fun SudokuScreen(viewModel: MainViewModel) {
         if (maxWidth > maxHeight) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 SudokuBoard(game, selected, boardSize) { selected = it }
-                SudokuPad(game, selected, viewModel, Modifier.weight(1f))
+                SudokuPad(game, selected, noteMode, { noteMode = it }, viewModel, Modifier.weight(1f))
             }
         } else {
             Column(
@@ -100,7 +103,7 @@ fun SudokuScreen(viewModel: MainViewModel) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SudokuBoard(game, selected, boardSize) { selected = it }
-                SudokuPad(game, selected, viewModel, Modifier.fillMaxWidth())
+                SudokuPad(game, selected, noteMode, { noteMode = it }, viewModel, Modifier.fillMaxWidth())
             }
         }
     }
@@ -110,6 +113,7 @@ fun SudokuScreen(viewModel: MainViewModel) {
 private fun SudokuBoard(game: SudokuGame, selected: Int?, size: Dp, onSelect: (Int) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val fontSize = with(LocalDensity.current) { (size / 18).toSp() }
+    val noteFontSize = with(LocalDensity.current) { (size / 38).toSp() }
     val selectedDigit = selected?.let { game.cells[it] } ?: 0
 
     Column(
@@ -150,6 +154,32 @@ private fun SudokuBoard(game: SudokuGame, selected: Int?, size: Dp, onSelect: (I
                                 fontSize = fontSize,
                                 fontWeight = if (game.isGiven(index)) FontWeight.Bold else FontWeight.Normal,
                             )
+                        } else if (game.notes[index].isNotEmpty()) {
+                            SudokuNotes(game.notes[index], noteFontSize)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 칸 안을 3×3으로 나눠 메모 숫자를 제자리에 적는다. */
+@Composable
+private fun SudokuNotes(note: Set<Int>, fontSize: TextUnit) {
+    Column(Modifier.fillMaxSize()) {
+        for (row in 0 until 3) {
+            Row(Modifier.fillMaxWidth().weight(1f)) {
+                for (column in 0 until 3) {
+                    val digit = row * 3 + column + 1
+                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        if (digit in note) {
+                            Text(
+                                digit.toString(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = fontSize,
+                                lineHeight = fontSize,
+                            )
                         }
                     }
                 }
@@ -159,27 +189,55 @@ private fun SudokuBoard(game: SudokuGame, selected: Int?, size: Dp, onSelect: (I
 }
 
 @Composable
-private fun SudokuPad(game: SudokuGame, selected: Int?, viewModel: MainViewModel, modifier: Modifier) {
+private fun SudokuPad(
+    game: SudokuGame,
+    selected: Int?,
+    noteMode: Boolean,
+    onNoteModeChange: (Boolean) -> Unit,
+    viewModel: MainViewModel,
+    modifier: Modifier,
+) {
     val editable = selected != null && !game.isGiven(selected) && !game.isComplete
+    val filled = selected != null && game.cells[selected] != 0
 
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth()) {
             for (digit in 1..9) {
+                val left = (9 - game.cells.count { it == digit }).coerceAtLeast(0)
                 TextButton(
-                    onClick = { selected?.let { viewModel.enterSudoku(it, digit) } },
-                    enabled = editable,
+                    onClick = {
+                        selected?.let {
+                            if (noteMode) viewModel.toggleSudokuNote(it, digit) else viewModel.enterSudoku(it, digit)
+                        }
+                    },
+                    enabled = editable && !(noteMode && filled) && left > 0,
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
-                ) { Text(digit.toString(), style = MaterialTheme.typography.titleLarge) }
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(digit.toString(), style = MaterialTheme.typography.titleLarge)
+                        Text(left.toString(), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
         if (game.isComplete) {
             Text("완성했습니다!", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(12.dp))
         } else {
-            TextButton(
-                onClick = { selected?.let { viewModel.enterSudoku(it, 0) } },
-                enabled = editable && game.cells[selected!!] != 0,
-            ) { Text("지우기") }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = { selected?.let { viewModel.enterSudoku(it, 0) } },
+                    enabled = editable && (filled || game.notes[selected!!].isNotEmpty()),
+                ) { Text("지우기") }
+                FilterChip(
+                    selected = noteMode,
+                    onClick = { onNoteModeChange(!noteMode) },
+                    label = { Text("메모") },
+                )
+            }
         }
     }
 }

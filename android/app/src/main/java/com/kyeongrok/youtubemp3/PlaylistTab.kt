@@ -1,6 +1,7 @@
 package com.kyeongrok.youtubemp3
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -9,6 +10,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +61,10 @@ private val AUDIO_PERMISSION =
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
+// 사용자 재생목록 ID는 시각 값이라 겹치지 않는다.
+private const val RECENT_ID = -1L
+private const val RECENT_LIMIT = 50
+
 private fun hasAudioPermission(context: Context) =
     context.checkSelfPermission(AUDIO_PERMISSION) == PackageManager.PERMISSION_GRANTED
 
@@ -83,7 +89,7 @@ fun PlaylistTab(viewModel: MainViewModel) {
     }
 
     val open = playlists.find { it.id == openId }
-    BackHandler(open != null) { openId = null }
+    BackHandler(openId != null) { openId = null }
 
     Column(Modifier.fillMaxSize()) {
         if (!canRead) {
@@ -104,10 +110,10 @@ fun PlaylistTab(viewModel: MainViewModel) {
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (denied) "설정에서 음악 접근 허용하기" else "기기의 모든 음악을 쓰려면 접근 허용하기") }
         }
-        if (open == null) {
-            PlaylistList(playlists, viewModel, onOpen = { openId = it })
-        } else {
-            PlaylistDetail(open, deviceTracks, viewModel, onBack = { openId = null })
+        when {
+            openId == RECENT_ID -> RecentTracks(deviceTracks, onBack = { openId = null })
+            open == null -> PlaylistList(playlists, viewModel, onOpen = { openId = it })
+            else -> PlaylistDetail(open, deviceTracks, viewModel, onBack = { openId = null })
         }
     }
 }
@@ -121,6 +127,10 @@ private fun PlaylistList(playlists: List<Playlist>, viewModel: MainViewModel, on
             Text("새 재생목록")
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
+            item {
+                Text("최근 추가된 노래", Modifier.fillMaxWidth().clickable { onOpen(RECENT_ID) }.padding(16.dp))
+                HorizontalDivider()
+            }
             items(playlists, key = { it.id }) { playlist ->
                 Text(
                     playlist.name,
@@ -141,6 +151,38 @@ private fun PlaylistList(playlists: List<Playlist>, viewModel: MainViewModel, on
                 onOpen(viewModel.createPlaylist(it))
             },
         )
+    }
+}
+
+/** 기기에 추가된 순서대로 자동으로 채워지는 목록이라 곡을 고치는 버튼은 없다. */
+@Composable
+private fun RecentTracks(deviceTracks: List<Track>, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val tracks = deviceTracks.sortedByDescending { it.dateAdded }.take(RECENT_LIMIT)
+
+    Column(Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+            }
+            Text("최근 추가된 노래")
+        }
+        Button(
+            onClick = { Player.play(context, tracks, 0) },
+            enabled = tracks.isNotEmpty(),
+            modifier = Modifier.padding(horizontal = 16.dp),
+        ) { Text("전체 재생") }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
+            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+                Text(
+                    track.title,
+                    Modifier.fillMaxWidth().clickable { Player.play(context, tracks, index) }.padding(16.dp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                HorizontalDivider()
+            }
+        }
     }
 }
 
@@ -216,6 +258,7 @@ private fun PlaylistDetail(
         TrackPickerDialog(
             deviceTracks,
             initial = playlist.trackIds.toSet(),
+            viewModel,
             onDismiss = { picking = false },
             onConfirm = {
                 picking = false
@@ -244,12 +287,34 @@ private fun PlaylistDetail(
 private fun TrackPickerDialog(
     deviceTracks: List<Track>,
     initial: Set<Long>,
+    viewModel: MainViewModel,
     onDismiss: () -> Unit,
     onConfirm: (Set<Long>) -> Unit,
 ) {
     var filter by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf(initial) }
+    var deleting by remember { mutableStateOf<Track?>(null) }
+    var confirming by remember { mutableStateOf<Track?>(null) }
     val visible = deviceTracks.filter { it.title.contains(filter.trim(), ignoreCase = true) }
+    val context = LocalContext.current
+    val deleteRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        // Android 11부터는 시스템이 이미 지웠고, 그 전에는 허락만 받았으므로 다시 지운다.
+        if (result.resultCode == Activity.RESULT_OK) {
+            deleting?.let {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) viewModel.forgetTrack(it) else viewModel.delete(it)
+            }
+        }
+        deleting = null
+    }
+    val deleteTrack = { track: Track ->
+        val sender = Library.requestDelete(context, track)
+        if (sender == null) {
+            viewModel.forgetTrack(track)
+        } else {
+            deleting = track
+            deleteRequest.launch(IntentSenderRequest.Builder(sender).build())
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -272,10 +337,17 @@ private fun TrackPickerDialog(
                             Checkbox(checked, onCheckedChange = null, Modifier.padding(12.dp))
                             Text(
                                 track.title,
+                                Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            // Android 11부터는 시스템이 직접 삭제를 확인한다.
+                            IconButton(onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) deleteTrack(track) else confirming = track
+                            }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "영구 삭제")
+                            }
                         }
                     }
                 }
@@ -284,4 +356,19 @@ private fun TrackPickerDialog(
         confirmButton = { TextButton(onClick = { onConfirm(selected) }) { Text("확인") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
+
+    confirming?.let { track ->
+        AlertDialog(
+            onDismissRequest = { confirming = null },
+            title = { Text("영구 삭제") },
+            text = { Text("'${track.title}' 파일을 기기에서 완전히 지웁니다. 되돌릴 수 없습니다.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirming = null
+                    deleteTrack(track)
+                }) { Text("삭제") }
+            },
+            dismissButton = { TextButton(onClick = { confirming = null }) { Text("취소") } },
+        )
+    }
 }

@@ -3,14 +3,17 @@ package com.kyeongrok.youtubemp3
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -21,11 +24,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
@@ -33,6 +41,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +53,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -64,7 +74,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,6 +87,8 @@ import kotlinx.coroutines.delay
 
 // 메뉴 버튼이 목록 끝 항목의 버튼을 가리지 않도록 띄운다.
 internal val ListPadding = PaddingValues(bottom = 88.dp)
+
+private enum class MiniGame { None, Sudoku, Shanghai }
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -87,7 +103,15 @@ class MainActivity : ComponentActivity() {
         handleShare(intent)
 
         setContent {
-            AppTheme {
+            val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+            val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
+            val dark = isDarkTheme(themeMode)
+            // 앱 테마가 시스템과 달라도 상태바 아이콘이 배경과 대비되도록 맞춘다.
+            LaunchedEffect(dark) {
+                val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+            }
+            AppTheme(dark, colorTheme) {
                 MainScreen(viewModel)
             }
         }
@@ -117,10 +141,47 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppTheme(content: @Composable () -> Unit) {
+private fun isDarkTheme(mode: ThemeMode) = when (mode) {
+    ThemeMode.System -> isSystemInDarkTheme()
+    ThemeMode.Light -> false
+    ThemeMode.Dark -> true
+}
+
+@Composable
+private fun AppTheme(dark: Boolean, color: ColorTheme, content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
+        colorScheme = if (dark) darkColorScheme() else lightScheme(color),
         content = { Surface(Modifier.fillMaxSize(), content = content) },
+    )
+}
+
+private fun lightScheme(color: ColorTheme): ColorScheme {
+    if (color == ColorTheme.Purple) return lightColorScheme()
+    val primary = ComposeColor(color.primary)
+    val container = ComposeColor(color.container)
+    val onContainer = ComposeColor(color.onContainer)
+    val secondaryContainer = ComposeColor(color.secondaryContainer)
+    val background = ComposeColor(color.background)
+    val variant = ComposeColor(color.surfaceVariant)
+    return lightColorScheme(
+        primary = primary,
+        primaryContainer = container,
+        onPrimaryContainer = onContainer,
+        secondary = primary,
+        secondaryContainer = secondaryContainer,
+        onSecondaryContainer = onContainer,
+        tertiary = primary,
+        tertiaryContainer = container,
+        onTertiaryContainer = onContainer,
+        background = background,
+        surface = background,
+        surfaceVariant = variant,
+        surfaceTint = primary,
+        surfaceContainerLowest = ComposeColor.White,
+        surfaceContainerLow = background,
+        surfaceContainer = variant,
+        surfaceContainerHigh = variant,
+        surfaceContainerHighest = variant,
     )
 }
 
@@ -132,9 +193,12 @@ private fun MainScreen(viewModel: MainViewModel) {
     val update by viewModel.update.collectAsStateWithLifecycle()
     val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
     var updateAsked by rememberSaveable { mutableStateOf(false) }
-    var sudokuOpen by rememberSaveable { mutableStateOf(false) }
+    var game by rememberSaveable { mutableStateOf(MiniGame.None) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
 
-    BackHandler(sudokuOpen) { sudokuOpen = false }
+    BackHandler(game != MiniGame.None) { game = MiniGame.None }
+
+    if (settingsOpen) SettingsDialog(viewModel, onDismiss = { settingsOpen = false })
 
     update?.takeIf { !updateAsked }?.let { release ->
         AlertDialog(
@@ -153,17 +217,21 @@ private fun MainScreen(viewModel: MainViewModel) {
 
     Scaffold(
         topBar = {
-            if (sudokuOpen) {
-                SudokuTopBar(viewModel, onBack = { sudokuOpen = false })
-            } else {
-                TopAppBar(title = { Text("YoutubeMp3") })
+            when (game) {
+                MiniGame.Sudoku -> SudokuTopBar(viewModel, onBack = { game = MiniGame.None })
+                MiniGame.Shanghai -> ShanghaiTopBar(viewModel, onBack = { game = MiniGame.None })
+                MiniGame.None -> TopAppBar(title = { Text("YoutubeMp3") })
             }
         },
         bottomBar = { PlayerBar() },
-        floatingActionButton = { if (!sudokuOpen) MenuButton(onSudoku = { sudokuOpen = true }) },
+        floatingActionButton = {
+            if (game == MiniGame.None) MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true })
+        },
     ) { padding ->
-        if (sudokuOpen) {
-            Column(Modifier.padding(padding).fillMaxSize()) { SudokuScreen(viewModel) }
+        if (game != MiniGame.None) {
+            Column(Modifier.padding(padding).fillMaxSize()) {
+                if (game == MiniGame.Sudoku) SudokuScreen(viewModel) else ShanghaiScreen(viewModel)
+            }
             return@Scaffold
         }
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -194,7 +262,7 @@ private fun MainScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-private fun MenuButton(onSudoku: () -> Unit) {
+private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
     Box {
@@ -206,10 +274,78 @@ private fun MenuButton(onSudoku: () -> Unit) {
                 text = { Text("스도쿠") },
                 onClick = {
                     expanded = false
-                    onSudoku()
+                    onGame(MiniGame.Sudoku)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("상하이") },
+                onClick = {
+                    expanded = false
+                    onGame(MiniGame.Shanghai)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("설정") },
+                onClick = {
+                    expanded = false
+                    onSettings()
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun SettingsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
+    val dark = isDarkTheme(themeMode)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("설정") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("테마", style = MaterialTheme.typography.titleSmall)
+                ThemeMode.entries.forEach { mode ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { viewModel.setThemeMode(mode) }.padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = mode == themeMode, onClick = null)
+                        Text(mode.label, Modifier.padding(start = 12.dp))
+                    }
+                }
+                if (!dark) {
+                    Text(
+                        "색상",
+                        Modifier.padding(top = 12.dp, bottom = 8.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ColorTheme.entries.forEach { color ->
+                            ColorSwatch(color, color == colorTheme) { viewModel.setColorTheme(color) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
+    )
+}
+
+@Composable
+private fun ColorSwatch(color: ColorTheme, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(36.dp)
+            .background(ComposeColor(color.primary), CircleShape)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = color.label },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = ComposeColor.White)
     }
 }
 

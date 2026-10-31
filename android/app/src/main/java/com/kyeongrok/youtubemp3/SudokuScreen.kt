@@ -1,0 +1,185 @@
+package com.kyeongrok.youtubemp3
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SudokuTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
+    var levelsOpen by remember { mutableStateOf(false) }
+    val game by viewModel.sudoku.collectAsStateWithLifecycle()
+
+    TopAppBar(
+        title = { Text(game?.let { "스도쿠 · ${it.level.label}" } ?: "스도쿠") },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+            }
+        },
+        actions = {
+            TextButton(onClick = { levelsOpen = true }) { Text("새 게임") }
+            DropdownMenu(levelsOpen, { levelsOpen = false }) {
+                SudokuLevel.entries.forEach { level ->
+                    DropdownMenuItem(
+                        text = { Text(level.label) },
+                        onClick = {
+                            levelsOpen = false
+                            viewModel.newSudoku(level)
+                        },
+                    )
+                }
+            }
+        },
+    )
+}
+
+@Composable
+fun SudokuScreen(viewModel: MainViewModel) {
+    val current by viewModel.sudoku.collectAsStateWithLifecycle()
+    var selected by rememberSaveable { mutableStateOf<Int?>(null) }
+    LaunchedEffect(Unit) { if (current == null) viewModel.newSudoku(SudokuLevel.Medium) }
+
+    val game = current
+    if (game == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize().padding(8.dp)) {
+        val boardSize = min(maxWidth, maxHeight)
+        if (maxWidth > maxHeight) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                SudokuBoard(game, selected, boardSize) { selected = it }
+                SudokuPad(game, selected, viewModel, Modifier.weight(1f))
+            }
+        } else {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SudokuBoard(game, selected, boardSize) { selected = it }
+                SudokuPad(game, selected, viewModel, Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable
+private fun SudokuBoard(game: SudokuGame, selected: Int?, size: Dp, onSelect: (Int) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val fontSize = with(LocalDensity.current) { (size / 18).toSp() }
+    val selectedDigit = selected?.let { game.cells[it] } ?: 0
+
+    Column(
+        Modifier.size(size).drawWithContent {
+            drawContent()
+            val step = this.size.width / 9
+            for (line in 0..9) {
+                val stroke = if (line % 3 == 0) 2.dp.toPx() else 0.5.dp.toPx()
+                val position = (step * line).coerceIn(stroke / 2, this.size.width - stroke / 2)
+                drawLine(colors.onSurface, Offset(position, 0f), Offset(position, this.size.height), stroke)
+                drawLine(colors.onSurface, Offset(0f, position), Offset(this.size.width, position), stroke)
+            }
+        },
+    ) {
+        for (row in 0 until 9) {
+            Row(Modifier.fillMaxWidth().weight(1f)) {
+                for (column in 0 until 9) {
+                    val index = row * 9 + column
+                    val digit = game.cells[index]
+                    val background = when {
+                        index == selected -> colors.primaryContainer
+                        digit != 0 && digit == selectedDigit -> colors.secondaryContainer
+                        selected != null && Sudoku.arePeers(selected, index) -> colors.surfaceVariant
+                        else -> colors.surface
+                    }
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight().background(background).clickable { onSelect(index) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (digit != 0) {
+                            Text(
+                                digit.toString(),
+                                color = when {
+                                    index in game.conflicts -> colors.error
+                                    game.isGiven(index) -> colors.onSurface
+                                    else -> colors.primary
+                                },
+                                fontSize = fontSize,
+                                fontWeight = if (game.isGiven(index)) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SudokuPad(game: SudokuGame, selected: Int?, viewModel: MainViewModel, modifier: Modifier) {
+    val editable = selected != null && !game.isGiven(selected) && !game.isComplete
+
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth()) {
+            for (digit in 1..9) {
+                TextButton(
+                    onClick = { selected?.let { viewModel.enterSudoku(it, digit) } },
+                    enabled = editable,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.weight(1f),
+                ) { Text(digit.toString(), style = MaterialTheme.typography.titleLarge) }
+            }
+        }
+        if (game.isComplete) {
+            Text("완성했습니다!", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(12.dp))
+        } else {
+            TextButton(
+                onClick = { selected?.let { viewModel.enterSudoku(it, 0) } },
+                enabled = editable && game.cells[selected!!] != 0,
+            ) { Text("지우기") }
+        }
+    }
+}

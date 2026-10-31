@@ -60,6 +60,25 @@ object Library {
         return tracks
     }
 
+    /** 기기의 음악 전체를 읽는다. 권한이 없으면 이 앱이 저장한 곡만 나온다. */
+    fun listDevice(context: Context): List<Track> {
+        val projection = arrayOf(MediaStore.MediaColumns._ID, MediaStore.Audio.Media.TITLE)
+        val tracks = mutableListOf<Track>()
+        context.contentResolver.query(
+            COLLECTION,
+            projection,
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0",
+            null,
+            "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE",
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(0)
+                tracks += Track(id, cursor.getString(1).orEmpty(), ContentUris.withAppendedId(COLLECTION, id))
+            }
+        }
+        return tracks
+    }
+
     fun delete(context: Context, track: Track) {
         context.contentResolver.delete(track.uri, null, null)
     }

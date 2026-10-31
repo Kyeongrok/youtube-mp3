@@ -3,10 +3,10 @@ package com.kyeongrok.youtubemp3
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,7 +14,9 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,11 +28,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +70,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+
+// 메뉴 버튼이 목록 끝 항목의 버튼을 가리지 않도록 띄운다.
+internal val ListPadding = PaddingValues(bottom = 88.dp)
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -119,32 +129,86 @@ private fun AppTheme(content: @Composable () -> Unit) {
 private fun MainScreen(viewModel: MainViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val downloads by Downloads.items.collectAsStateWithLifecycle()
-    val newerVersion by viewModel.newerVersion.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val update by viewModel.update.collectAsStateWithLifecycle()
+    val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
+    var updateAsked by rememberSaveable { mutableStateOf(false) }
+    var sudokuOpen by rememberSaveable { mutableStateOf(false) }
+
+    BackHandler(sudokuOpen) { sudokuOpen = false }
+
+    update?.takeIf { !updateAsked }?.let { release ->
+        AlertDialog(
+            onDismissRequest = { updateAsked = true },
+            title = { Text("새 버전") },
+            text = { Text("새 버전 ${release.version}이 나왔습니다. 받아서 설치할까요?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    updateAsked = true
+                    viewModel.installUpdate()
+                }) { Text("설치") }
+            },
+            dismissButton = { TextButton(onClick = { updateAsked = true }) { Text("나중에") } },
+        )
+    }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("YoutubeMp3") }) },
+        topBar = {
+            if (sudokuOpen) {
+                SudokuTopBar(viewModel, onBack = { sudokuOpen = false })
+            } else {
+                TopAppBar(title = { Text("YoutubeMp3") })
+            }
+        },
         bottomBar = { PlayerBar() },
+        floatingActionButton = { if (!sudokuOpen) MenuButton(onSudoku = { sudokuOpen = true }) },
     ) { padding ->
+        if (sudokuOpen) {
+            Column(Modifier.padding(padding).fillMaxSize()) { SudokuScreen(viewModel) }
+            return@Scaffold
+        }
         Column(Modifier.padding(padding).fillMaxSize()) {
-            newerVersion?.let { version ->
-                TextButton(
-                    onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppUpdate.RELEASES_URL)))
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("새 버전 $version 받기") }
+            update?.let { release ->
+                val progress = updateProgress
+                if (progress == null) {
+                    TextButton(onClick = viewModel::installUpdate, modifier = Modifier.fillMaxWidth()) {
+                        Text("새 버전 ${release.version} 설치")
+                    }
+                } else {
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                }
             }
             TabRow(selectedTabIndex = tab) {
                 Tab(tab == 0, { tab = 0 }, text = { Text("검색") })
                 Tab(tab == 1, { tab = 1 }, text = { Text("다운로드 (${downloads.size})") })
                 Tab(tab == 2, { tab = 2 }, text = { Text("내 음악") })
+                Tab(tab == 3, { tab = 3 }, text = { Text("재생목록") })
             }
             when (tab) {
                 0 -> SearchTab(viewModel)
                 1 -> DownloadsTab(downloads)
-                else -> LibraryTab(viewModel)
+                2 -> LibraryTab(viewModel)
+                else -> PlaylistTab(viewModel)
             }
+        }
+    }
+}
+
+@Composable
+private fun MenuButton(onSudoku: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        FloatingActionButton(onClick = { expanded = true }) {
+            Icon(Icons.Filled.Menu, contentDescription = "메뉴")
+        }
+        DropdownMenu(expanded, { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("스도쿠") },
+                onClick = {
+                    expanded = false
+                    onSudoku()
+                },
+            )
         }
     }
 }
@@ -183,7 +247,7 @@ private fun SearchTab(viewModel: MainViewModel) {
         }
         if (searching) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, maxLines = 4) }
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
             items(results, key = { it.url }) { result ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -208,7 +272,7 @@ private fun DownloadsTab(downloads: List<DownloadItem>) {
         TextButton(onClick = Downloads::clearFinished, modifier = Modifier.align(Alignment.End)) {
             Text("끝난 항목 지우기")
         }
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
             items(downloads.reversed(), key = { it.id }) { item ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -248,7 +312,7 @@ private fun LibraryTab(viewModel: MainViewModel) {
     if (tracks.isEmpty()) {
         Text("받은 음악이 없습니다. 파일은 Music/YoutubeMp3에 저장됩니다.", Modifier.padding(16.dp))
     }
-    LazyColumn(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
         items(tracks, key = { it.id }) { track ->
             Row(
                 Modifier.fillMaxWidth().clickable { Player.play(context, track) }.padding(start = 16.dp),
@@ -287,7 +351,13 @@ private fun PlayerBar() {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(track.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (state.queueSize > 1) {
+                    TextButton(onClick = Player::previous, enabled = state.queueIndex > 0) { Text("이전") }
+                }
                 TextButton(onClick = Player::togglePause) { Text(if (state.isPlaying) "일시정지" else "재생") }
+                if (state.queueSize > 1) {
+                    TextButton(onClick = Player::next, enabled = state.queueIndex < state.queueSize - 1) { Text("다음") }
+                }
             }
             Slider(
                 value = dragPosition ?: state.positionMs.toFloat(),

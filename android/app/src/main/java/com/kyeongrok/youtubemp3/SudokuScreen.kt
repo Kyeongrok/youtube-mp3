@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,13 +46,19 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SudokuTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
     var levelsOpen by remember { mutableStateOf(false) }
+    var recordsOpen by rememberSaveable { mutableStateOf(false) }
     val game by viewModel.sudoku.collectAsStateWithLifecycle()
+
+    if (recordsOpen) SudokuRecordsDialog(viewModel, onDismiss = { recordsOpen = false })
 
     TopAppBar(
         title = { Text(game?.let { "스도쿠 · ${it.level.label}" } ?: "스도쿠") },
@@ -61,6 +68,7 @@ fun SudokuTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         },
         actions = {
+            TextButton(onClick = { recordsOpen = true }) { Text("기록") }
             TextButton(onClick = { levelsOpen = true }) { Text("새 게임") }
             DropdownMenu(levelsOpen, { levelsOpen = false }) {
                 SudokuLevel.entries.forEach { level ->
@@ -78,11 +86,35 @@ fun SudokuTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
+private fun SudokuRecordsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
+    val records by viewModel.sudokuRecords.collectAsStateWithLifecycle()
+
+    GameRecordsDialog(
+        records.map {
+            "${it.level.label} · ${formatDuration(it.seconds)} · 틀린 횟수 ${it.mistakes}" to it.finishedAt
+        },
+        onDismiss,
+    )
+}
+
+@Composable
 fun SudokuScreen(viewModel: MainViewModel) {
     val current by viewModel.sudoku.collectAsStateWithLifecycle()
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
     var noteMode by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { if (current == null) viewModel.newSudoku(SudokuLevel.Medium) }
+
+    // 이 화면을 보고 있는 동안만 시간을 잰다.
+    LifecycleResumeEffect(Unit) {
+        val timer = scope.launch {
+            while (true) {
+                delay(1000)
+                viewModel.tickSudoku()
+            }
+        }
+        onPauseOrDispose { timer.cancel() }
+    }
 
     val game = current
     if (game == null) {
@@ -222,7 +254,11 @@ private fun SudokuPad(
             }
         }
         if (game.isComplete) {
-            Text("완성했습니다!", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(12.dp))
+            Text(
+                "완성했습니다! ${formatDuration(game.seconds)} · 틀린 횟수 ${game.mistakes}",
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(12.dp),
+            )
         } else {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),

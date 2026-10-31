@@ -7,6 +7,8 @@ data class ShanghaiGame(
     val faces: List<Int>,
     val selected: Int? = null,
     val hint: Pair<Int, Int>? = null,
+    val shuffles: Int = 0,
+    val seconds: Int = 0,
 ) {
     val remaining = faces.count { it != Shanghai.EMPTY }
     val isComplete = remaining == 0
@@ -39,7 +41,7 @@ data class ShanghaiGame(
         val pairs = faces.filter { it != Shanghai.EMPTY }.groupBy { it }.values
             .flatMap { same -> List(same.size / 2) { same[0] } }
         return Shanghai.deal(faces.indices.filter { faces[it] != Shanghai.EMPTY }, pairs)?.let {
-            ShanghaiGame(it)
+            ShanghaiGame(it, shuffles = shuffles + 1)
         }
     }
 }

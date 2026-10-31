@@ -10,8 +10,11 @@ enum class SudokuLevel(val label: String, val blanks: Int) {
 data class SudokuGame(
     val level: SudokuLevel,
     val puzzle: List<Int>,
+    val solution: List<Int>,
     val cells: List<Int>,
     val notes: List<Set<Int>> = List(puzzle.size) { emptySet() },
+    val mistakes: Int = 0,
+    val seconds: Int = 0,
 ) {
     val conflicts: Set<Int> = Sudoku.findConflicts(cells)
     val isComplete = 0 !in cells && conflicts.isEmpty()
@@ -21,7 +24,9 @@ data class SudokuGame(
     /** 숫자를 넣으면 그 칸의 메모와 같은 줄·칸·박스에 적힌 같은 숫자 메모를 지운다. 0은 칸을 비운다. */
     fun enter(index: Int, digit: Int): SudokuGame {
         if (isGiven(index) || isComplete) return this
+        val wrong = digit != 0 && digit != cells[index] && digit != solution[index]
         return copy(
+            mistakes = if (wrong) mistakes + 1 else mistakes,
             cells = cells.toMutableList().also { it[index] = digit },
             notes = notes.mapIndexed { other, note ->
                 when {
@@ -65,6 +70,7 @@ object Sudoku {
     fun generate(level: SudokuLevel): SudokuGame {
         val cells = IntArray(SIZE)
         countSolutions(cells, 1)
+        val solution = cells.toList()
 
         var blanks = 0
         for (index in (0 until SIZE).shuffled()) {
@@ -73,7 +79,7 @@ object Sudoku {
             cells[index] = 0
             if (countSolutions(cells.copyOf(), 2) == 1) blanks++ else cells[index] = digit
         }
-        return SudokuGame(level, cells.toList(), cells.toList())
+        return SudokuGame(level, cells.toList(), solution, cells.toList())
     }
 
     /** 후보가 가장 적은 빈칸부터 채워 풀이를 limit개까지 센다. limit에 닿으면 cells는 풀이로 채워진 채 끝난다. */

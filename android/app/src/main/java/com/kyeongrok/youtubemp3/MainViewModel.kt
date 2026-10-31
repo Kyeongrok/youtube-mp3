@@ -40,8 +40,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableSudoku = MutableStateFlow<SudokuGame?>(null)
     val sudoku = mutableSudoku.asStateFlow()
 
+    private val mutableSudokuRecords = MutableStateFlow(SudokuRecords.load(application))
+    val sudokuRecords = mutableSudokuRecords.asStateFlow()
+
+    // 판이 매초 다시 그려지지 않도록 게임 상태와 따로 세고, 끝날 때 게임에 옮긴다.
+    private var sudokuSeconds = 0
+
     private val mutableShanghai = MutableStateFlow<ShanghaiGame?>(null)
     val shanghai = mutableShanghai.asStateFlow()
+
+    private val mutableShanghaiRecords = MutableStateFlow(ShanghaiRecords.load(application))
+    val shanghaiRecords = mutableShanghaiRecords.asStateFlow()
+
+    private var shanghaiSeconds = 0
+
+    private val mutableFreeCell = MutableStateFlow<FreeCellGame?>(null)
+    val freeCell = mutableFreeCell.asStateFlow()
 
     private val mutableDeviceTracks =MutableStateFlow<List<Track>>(emptyList())
     val deviceTracks = mutableDeviceTracks.asStateFlow()
@@ -182,25 +196,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun newSudoku(level: SudokuLevel) {
         viewModelScope.launch {
             mutableSudoku.value = withContext(Dispatchers.Default) { Sudoku.generate(level) }
+            sudokuSeconds = 0
         }
     }
 
+    fun tickSudoku() {
+        if (mutableSudoku.value?.isComplete == false) sudokuSeconds++
+    }
+
     fun enterSudoku(index: Int, digit: Int) {
-        mutableSudoku.value = mutableSudoku.value?.enter(index, digit)
+        val game = mutableSudoku.value ?: return
+        val next = game.enter(index, digit)
+        if (next.isComplete && !game.isComplete) {
+            mutableSudoku.value = next.copy(seconds = sudokuSeconds)
+            val record = SudokuRecord(System.currentTimeMillis(), next.level, sudokuSeconds, next.mistakes)
+            mutableSudokuRecords.value = listOf(record) + mutableSudokuRecords.value
+            SudokuRecords.save(getApplication(), mutableSudokuRecords.value)
+        } else {
+            mutableSudoku.value = next
+        }
     }
 
     fun toggleSudokuNote(index: Int, digit: Int) {
         mutableSudoku.value = mutableSudoku.value?.toggleNote(index, digit)
     }
 
+    fun newFreeCell() {
+        mutableFreeCell.value = FreeCellGame.deal()
+    }
+
+    fun undoFreeCell() {
+        mutableFreeCell.value = mutableFreeCell.value?.undo()
+    }
+
+    fun tapFreeCellCascade(column: Int, row: Int?) {
+        mutableFreeCell.value = mutableFreeCell.value?.tapCascade(column, row)
+    }
+
+    fun tapFreeCellSpot(index: Int) {
+        mutableFreeCell.value = mutableFreeCell.value?.tapCell(index)
+    }
+
+    fun tapFreeCellFoundation() {
+        mutableFreeCell.value = mutableFreeCell.value?.tapFoundation()
+    }
+
     fun newShanghai() {
         viewModelScope.launch {
             mutableShanghai.value = withContext(Dispatchers.Default) { Shanghai.generate() }
+            shanghaiSeconds = 0
         }
     }
 
+    fun tickShanghai() {
+        if (mutableShanghai.value?.isComplete == false) shanghaiSeconds++
+    }
+
     fun pickShanghai(index: Int) {
-        mutableShanghai.value = mutableShanghai.value?.pick(index)
+        val game = mutableShanghai.value ?: return
+        val next = game.pick(index)
+        if (next.isComplete && !game.isComplete) {
+            mutableShanghai.value = next.copy(seconds = shanghaiSeconds)
+            val record = ShanghaiRecord(System.currentTimeMillis(), shanghaiSeconds, next.shuffles)
+            mutableShanghaiRecords.value = listOf(record) + mutableShanghaiRecords.value
+            ShanghaiRecords.save(getApplication(), mutableShanghaiRecords.value)
+        } else {
+            mutableShanghai.value = next
+        }
     }
 
     fun showShanghaiHint() {

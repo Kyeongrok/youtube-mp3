@@ -2,6 +2,7 @@ package com.kyeongrok.youtubemp3
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -38,10 +43,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val TileFace = Color(0xFFF7F1E1)
 private val TileEdge = Color(0xFFB9A67E)
+private val TileLine = Color(0xFF7A6A4A)
 private val TileBlocked = Color(0xFFDAD2BE)
 private val TileSelected = Color(0xFFFFD54F)
 private val TileHint = Color(0xFFAED581)
@@ -73,6 +82,16 @@ private val PIP_ROWS = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShanghaiTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
+    var recordsOpen by rememberSaveable { mutableStateOf(false) }
+    val records by viewModel.shanghaiRecords.collectAsStateWithLifecycle()
+
+    if (recordsOpen) {
+        GameRecordsDialog(
+            records.map { "${formatDuration(it.seconds)} · 섞은 횟수 ${it.shuffles}" to it.finishedAt },
+            onDismiss = { recordsOpen = false },
+        )
+    }
+
     TopAppBar(
         title = { Text("상하이") },
         navigationIcon = {
@@ -80,14 +99,29 @@ fun ShanghaiTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
             }
         },
-        actions = { TextButton(onClick = viewModel::newShanghai) { Text("새 게임") } },
+        actions = {
+            TextButton(onClick = { recordsOpen = true }) { Text("기록") }
+            TextButton(onClick = viewModel::newShanghai) { Text("새 게임") }
+        },
     )
 }
 
 @Composable
 fun ShanghaiScreen(viewModel: MainViewModel) {
     val current by viewModel.shanghai.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { if (current == null) viewModel.newShanghai() }
+
+    // 이 화면을 보고 있는 동안만 시간을 잰다.
+    LifecycleResumeEffect(Unit) {
+        val timer = scope.launch {
+            while (true) {
+                delay(1000)
+                viewModel.tickShanghai()
+            }
+        }
+        onPauseOrDispose { timer.cancel() }
+    }
 
     val game = current
     if (game == null) {
@@ -135,6 +169,7 @@ private fun ShanghaiBoard(game: ShanghaiGame, tileWidth: Dp, viewModel: MainView
                 val free = game.isFree(index)
                 ShanghaiTile(
                     face,
+                    layer = spot.layer,
                     background = when {
                         index == game.selected -> TileSelected
                         game.hint?.let { index == it.first || index == it.second } == true -> TileHint
@@ -156,13 +191,18 @@ private fun ShanghaiBoard(game: ShanghaiGame, tileWidth: Dp, viewModel: MainView
 }
 
 @Composable
-private fun ShanghaiTile(face: Int, background: Color, width: Dp, height: Dp, modifier: Modifier) {
+private fun ShanghaiTile(face: Int, layer: Int, background: Color, width: Dp, height: Dp, modifier: Modifier) {
+    // 높은 층일수록 옆면을 두껍게 그려 옆 패와 높이 차이가 보이게 한다.
+    val side = 2.dp + 1.dp * layer
+
     Box(
         modifier
             .size(width, height)
             .background(TileEdge, TileShape)
-            .padding(end = 2.dp, bottom = 2.dp)
+            .border(1.dp, TileLine, TileShape)
+            .padding(end = side, bottom = side)
             .background(background, TileShape)
+            .border(1.dp, TileLine, TileShape)
             .padding(2.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -233,7 +273,7 @@ private fun ShanghaiControls(game: ShanghaiGame, viewModel: MainViewModel, modif
     Column(modifier.padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             when {
-                game.isComplete -> "모두 맞췄습니다!"
+                game.isComplete -> "모두 맞췄습니다! ${formatDuration(game.seconds)} · 섞은 횟수 ${game.shuffles}"
                 game.freePair == null -> "더 맞출 수 있는 패가 없습니다. 섞어 보세요."
                 else -> "남은 패 ${game.remaining}"
             },

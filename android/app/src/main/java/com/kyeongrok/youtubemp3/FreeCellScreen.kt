@@ -73,7 +73,7 @@ fun FreeCellTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         },
         actions = {
-            TextButton(onClick = viewModel::undoFreeCell, enabled = current?.previous != null) { Text("되돌리기") }
+            TextButton(onClick = viewModel::undoFreeCell, enabled = current?.previous != null) { Text("실행취소") }
             TextButton(onClick = viewModel::newFreeCell) { Text("새 게임") }
         },
     )
@@ -91,7 +91,9 @@ fun FreeCellScreen(viewModel: MainViewModel) {
             maxHeight / 5,
         )
         val cardHeight = cardWidth * CARD_RATIO
-        val tableHeight = maxHeight - cardHeight - 48.dp
+        // 가로 화면은 판 옆이 비어 있어 실행취소 버튼 자리를 따로 비우지 않는다.
+        val wide = maxWidth > maxHeight
+        val tableHeight = maxHeight - cardHeight - if (wide) 48.dp else 96.dp
 
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(horizontalArrangement = Arrangement.spacedBy(CardGap)) {
@@ -132,6 +134,11 @@ fun FreeCellScreen(viewModel: MainViewModel) {
                 }
             }
         }
+        TextButton(
+            onClick = viewModel::undoFreeCell,
+            enabled = game.previous != null,
+            modifier = Modifier.align(if (wide) Alignment.BottomEnd else Alignment.BottomCenter),
+        ) { Text("실행취소") }
     }
 }
 

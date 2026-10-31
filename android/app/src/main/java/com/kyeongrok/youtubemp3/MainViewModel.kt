@@ -1,6 +1,7 @@
 package com.kyeongrok.youtubemp3
 
 import android.app.Application
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -56,6 +57,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val mutableFreeCell = MutableStateFlow<FreeCellGame?>(null)
     val freeCell = mutableFreeCell.asStateFlow()
+
+    private var lastCardTap = 0L
 
     private val mutableDeviceTracks =MutableStateFlow<List<Track>>(emptyList())
     val deviceTracks = mutableDeviceTracks.asStateFlow()
@@ -229,8 +232,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mutableFreeCell.value = mutableFreeCell.value?.undo()
     }
 
+    /** 첫 탭은 바로 카드를 고르고, 이어서 같은 끝 카드를 누르면 빈 프리셀로 옮긴다. */
     fun tapFreeCellCascade(column: Int, row: Int?) {
-        mutableFreeCell.value = mutableFreeCell.value?.tapCascade(column, row)
+        val game = mutableFreeCell.value ?: return
+        val now = SystemClock.uptimeMillis()
+        val doubleTap = row != null && row == game.cascades[column].lastIndex &&
+            game.picked == FreeCellPick.Cascade(column, row) && now - lastCardTap < DOUBLE_TAP_MILLIS
+        val emptyCell = game.cells.indexOf(null)
+        lastCardTap = now
+        mutableFreeCell.value = if (doubleTap && emptyCell >= 0) game.tapCell(emptyCell) else game.tapCascade(column, row)
     }
 
     fun tapFreeCellSpot(index: Int) {
@@ -284,6 +294,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         val QUALITIES = listOf("320K", "192K", "128K")
         private const val DEFAULT_QUALITY = "192K"
+        private const val DOUBLE_TAP_MILLIS = 400L
 
         private val URL_PATTERN = Regex("""https?://\S+""")
 

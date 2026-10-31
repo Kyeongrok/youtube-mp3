@@ -102,6 +102,15 @@ fun SudokuScreen(viewModel: MainViewModel) {
     val current by viewModel.sudoku.collectAsStateWithLifecycle()
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
     var noteMode by rememberSaveable { mutableStateOf(false) }
+    var focused by rememberSaveable { mutableStateOf<Int?>(null) }
+    val onSelect = { index: Int ->
+        selected = if (index == selected) null else index
+        focused = null
+    }
+    val onFocus = { digit: Int ->
+        selected = null
+        focused = if (digit == focused) null else digit
+    }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { if (current == null) viewModel.newSudoku(SudokuLevel.Medium) }
 
@@ -126,27 +135,27 @@ fun SudokuScreen(viewModel: MainViewModel) {
         val boardSize = min(maxWidth, maxHeight)
         if (maxWidth > maxHeight) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                SudokuBoard(game, selected, boardSize) { selected = it }
-                SudokuPad(game, selected, noteMode, { noteMode = it }, viewModel, Modifier.weight(1f))
+                SudokuBoard(game, selected, focused, boardSize, onSelect)
+                SudokuPad(game, selected, focused, noteMode, { noteMode = it }, onFocus, viewModel, Modifier.weight(1f))
             }
         } else {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SudokuBoard(game, selected, boardSize) { selected = it }
-                SudokuPad(game, selected, noteMode, { noteMode = it }, viewModel, Modifier.fillMaxWidth())
+                SudokuBoard(game, selected, focused, boardSize, onSelect)
+                SudokuPad(game, selected, focused, noteMode, { noteMode = it }, onFocus, viewModel, Modifier.fillMaxWidth())
             }
         }
     }
 }
 
 @Composable
-private fun SudokuBoard(game: SudokuGame, selected: Int?, size: Dp, onSelect: (Int) -> Unit) {
+private fun SudokuBoard(game: SudokuGame, selected: Int?, focused: Int?, size: Dp, onSelect: (Int) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val fontSize = with(LocalDensity.current) { (size / 18).toSp() }
     val noteFontSize = with(LocalDensity.current) { (size / 38).toSp() }
-    val selectedDigit = selected?.let { game.cells[it] } ?: 0
+    val highlighted = focused ?: selected?.let { game.cells[it] } ?: 0
 
     Column(
         Modifier.size(size).drawWithContent {
@@ -167,7 +176,7 @@ private fun SudokuBoard(game: SudokuGame, selected: Int?, size: Dp, onSelect: (I
                     val digit = game.cells[index]
                     val background = when {
                         index == selected -> colors.primaryContainer
-                        digit != 0 && digit == selectedDigit -> colors.secondaryContainer
+                        digit != 0 && digit == highlighted -> colors.secondaryContainer
                         selected != null && Sudoku.arePeers(selected, index) -> colors.surfaceVariant
                         else -> colors.surface
                     }
@@ -184,10 +193,14 @@ private fun SudokuBoard(game: SudokuGame, selected: Int?, size: Dp, onSelect: (I
                                     else -> colors.primary
                                 },
                                 fontSize = fontSize,
-                                fontWeight = if (game.isGiven(index)) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = when {
+                                    digit == focused -> FontWeight.Black
+                                    game.isGiven(index) -> FontWeight.Bold
+                                    else -> FontWeight.Normal
+                                },
                             )
                         } else if (game.notes[index].isNotEmpty()) {
-                            SudokuNotes(game.notes[index], noteFontSize)
+                            SudokuNotes(game.notes[index], focused, noteFontSize)
                         }
                     }
                 }
@@ -198,7 +211,7 @@ private fun SudokuBoard(game: SudokuGame, selected: Int?, size: Dp, onSelect: (I
 
 /** 칸 안을 3×3으로 나눠 메모 숫자를 제자리에 적는다. */
 @Composable
-private fun SudokuNotes(note: Set<Int>, fontSize: TextUnit) {
+private fun SudokuNotes(note: Set<Int>, focused: Int?, fontSize: TextUnit) {
     Column(Modifier.fillMaxSize()) {
         for (row in 0 until 3) {
             Row(Modifier.fillMaxWidth().weight(1f)) {
@@ -208,9 +221,14 @@ private fun SudokuNotes(note: Set<Int>, fontSize: TextUnit) {
                         if (digit in note) {
                             Text(
                                 digit.toString(),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (digit == focused) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                                 fontSize = fontSize,
                                 lineHeight = fontSize,
+                                fontWeight = if (digit == focused) FontWeight.Black else FontWeight.Normal,
                             )
                         }
                     }
@@ -224,8 +242,10 @@ private fun SudokuNotes(note: Set<Int>, fontSize: TextUnit) {
 private fun SudokuPad(
     game: SudokuGame,
     selected: Int?,
+    focused: Int?,
     noteMode: Boolean,
     onNoteModeChange: (Boolean) -> Unit,
+    onFocus: (Int) -> Unit,
     viewModel: MainViewModel,
     modifier: Modifier,
 ) {
@@ -238,16 +258,23 @@ private fun SudokuPad(
                 val left = (9 - game.cells.count { it == digit }).coerceAtLeast(0)
                 TextButton(
                     onClick = {
-                        selected?.let {
-                            if (noteMode) viewModel.toggleSudokuNote(it, digit) else viewModel.enterSudoku(it, digit)
+                        // 숫자를 넣을 칸이 없으면 판에서 그 숫자를 찾아 보여 준다.
+                        when {
+                            !editable -> onFocus(digit)
+                            noteMode -> viewModel.toggleSudokuNote(selected!!, digit)
+                            else -> viewModel.enterSudoku(selected!!, digit)
                         }
                     },
-                    enabled = editable && !(noteMode && filled) && left > 0,
+                    enabled = !game.isComplete && (!editable || (!(noteMode && filled) && left > 0)),
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.weight(1f),
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(digit.toString(), style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            digit.toString(),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = if (digit == focused) FontWeight.Black else FontWeight.Normal,
+                        )
                         Text(left.toString(), style = MaterialTheme.typography.labelSmall)
                     }
                 }

@@ -6,6 +6,8 @@ import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -59,6 +61,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val freeCell = mutableFreeCell.asStateFlow()
 
     private var lastCardTap = 0L
+
+    private val mutableRummikub = MutableStateFlow(SavedGames.loadRummikub(application))
+    val rummikub = mutableRummikub.asStateFlow()
+
+    private val mutableRummikubRecords = MutableStateFlow(RummikubRecords.load(application))
+    val rummikubRecords = mutableRummikubRecords.asStateFlow()
+
+    private var rummikubSeconds = mutableRummikub.value?.seconds ?: 0
+    private var rummikubCpu: Job? = null
 
     private val mutableDeviceTracks = MutableStateFlow<List<Track>>(emptyList())
     val deviceTracks = mutableDeviceTracks.asStateFlow()
@@ -314,10 +325,94 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val rummikubTutorialSeen get() = AppSettings.loadRummikubTutorialSeen(getApplication())
+
+    fun markRummikubTutorialSeen() {
+        AppSettings.saveRummikubTutorialSeen(getApplication())
+    }
+
+    fun newRummikub(cpus: Int) {
+        rummikubCpu?.cancel()
+        mutableRummikub.value = Rummikub.deal(cpus)
+        rummikubSeconds = 0
+        saveRummikub()
+    }
+
+    fun tickRummikub() {
+        if (mutableRummikub.value?.isFinished == false) rummikubSeconds++
+    }
+
+    fun saveRummikub() {
+        val game = mutableRummikub.value ?: return
+        SavedGames.saveRummikub(getApplication(), game.atTurnStart().copy(seconds = rummikubSeconds))
+    }
+
+    fun tapRummikubTile(tile: RummikubTile) {
+        mutableRummikub.value = mutableRummikub.value?.tapTile(tile)
+    }
+
+    fun moveRummikubTo(meld: Int) {
+        mutableRummikub.value = mutableRummikub.value?.moveTo(meld)
+    }
+
+    fun newRummikubMeld() {
+        mutableRummikub.value = mutableRummikub.value?.newMeld()
+    }
+
+    fun returnRummikubTiles() {
+        mutableRummikub.value = mutableRummikub.value?.returnPicked()
+    }
+
+    fun resetRummikubTurn() {
+        mutableRummikub.value = mutableRummikub.value?.resetTurn()
+    }
+
+    fun drawRummikub() {
+        val game = mutableRummikub.value ?: return
+        if (!game.isHumanTurn || !game.isUntouched) return
+        finishRummikubTurn(game.draw())
+        resumeRummikub()
+    }
+
+    fun finishRummikubTurn() {
+        val game = mutableRummikub.value ?: return
+        val next = game.finishTurn()
+        if (game.problem != null) {
+            mutableRummikub.value = next
+            return
+        }
+        finishRummikubTurn(next)
+        resumeRummikub()
+    }
+
+    /** 컴퓨터 차례면 내 차례가 돌아올 때까지 하나씩 둔다. */
+    fun resumeRummikub() {
+        if (rummikubCpu?.isActive == true) return
+        rummikubCpu = viewModelScope.launch {
+            while (true) {
+                val game = mutableRummikub.value ?: break
+                if (game.turn == Rummikub.HUMAN || game.isFinished) break
+                delay(CPU_TURN_MILLIS)
+                finishRummikubTurn(withContext(Dispatchers.Default) { game.cpuTurn() })
+            }
+        }
+    }
+
+    private fun finishRummikubTurn(next: RummikubGame) {
+        mutableRummikub.value = next.copy(seconds = rummikubSeconds)
+        if (next.winner == Rummikub.HUMAN) {
+            val record = RummikubRecord(System.currentTimeMillis(), next.cpus, rummikubSeconds, next.humanScore)
+            mutableRummikubRecords.value = listOf(record) + mutableRummikubRecords.value
+            RummikubRecords.save(getApplication(), mutableRummikubRecords.value)
+        }
+        saveRummikub()
+    }
+
     companion object {
         val QUALITIES = listOf("320K", "192K", "128K")
         private const val DEFAULT_QUALITY = "192K"
         private const val DOUBLE_TAP_MILLIS = 400L
+        private const val CPU_TURN_MILLIS = 900L
 
         private val URL_PATTERN = Regex("""https?://\S+""")
 

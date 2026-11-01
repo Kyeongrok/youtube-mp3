@@ -1,0 +1,364 @@
+package com.kyeongrok.youtubemp3
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private val TileFace = Color.White
+private val TilePicked = Color(0xFFFFF59D)
+private val TileLine = Color(0xFF8A8A8A)
+private val TileInks = listOf(Color(0xFFC62828), Color(0xFF1565C0), Color(0xFF212121), Color(0xFFEF6C00))
+private val JokerInk = Color(0xFF6A1B9A)
+
+private val TileShape = RoundedCornerShape(4.dp)
+private val TileGap = 2.dp
+private val MaxTableTile = 34.dp
+private val MaxRackTile = 44.dp
+private val RackHeight = 170.dp
+private const val TILE_RATIO = 1.35f
+private const val TABLE_TILES_WIDE = 13.8f
+private const val RACK_TILES_WIDE = 9.5f
+private const val DEFAULT_CPUS = 2
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RummikubTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
+    var cpusOpen by remember { mutableStateOf(false) }
+    var recordsOpen by rememberSaveable { mutableStateOf(false) }
+    var tutorialOpen by rememberSaveable { mutableStateOf(!viewModel.rummikubTutorialSeen) }
+
+    if (recordsOpen) RummikubRecordsDialog(viewModel, onDismiss = { recordsOpen = false })
+    if (tutorialOpen) {
+        RummikubTutorialDialog(
+            onDismiss = {
+                tutorialOpen = false
+                viewModel.markRummikubTutorialSeen()
+            },
+        )
+    }
+
+    TopAppBar(
+        title = { Text("루미큐브") },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+            }
+        },
+        actions = {
+            IconButton(onClick = { tutorialOpen = true }) {
+                Icon(Icons.Filled.Info, contentDescription = "게임 방법")
+            }
+            TextButton(onClick = { recordsOpen = true }) { Text("기록") }
+            TextButton(onClick = { cpusOpen = true }) { Text("새 게임") }
+            DropdownMenu(cpusOpen, { cpusOpen = false }) {
+                for (cpus in 1..3) {
+                    DropdownMenuItem(
+                        text = { Text("CPU ${cpus}명") },
+                        onClick = {
+                            cpusOpen = false
+                            viewModel.newRummikub(cpus)
+                        },
+                    )
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun RummikubRecordsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
+    val records by viewModel.rummikubRecords.collectAsStateWithLifecycle()
+
+    GameRecordsDialog(
+        records.map { "CPU ${it.cpus}명 · ${formatDuration(it.seconds)} · ${it.score}점" to it.finishedAt },
+        onDismiss,
+    )
+}
+
+@Composable
+fun RummikubScreen(viewModel: MainViewModel) {
+    val current by viewModel.rummikub.collectAsStateWithLifecycle()
+    var byColor by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        if (current == null) viewModel.newRummikub(DEFAULT_CPUS)
+        viewModel.resumeRummikub()
+    }
+
+    // 이 화면을 보고 있는 동안만 시간을 잰다.
+    LifecycleResumeEffect(Unit) {
+        val timer = scope.launch {
+            while (true) {
+                delay(1000)
+                viewModel.tickRummikub()
+            }
+        }
+        onPauseOrDispose {
+            timer.cancel()
+            viewModel.saveRummikub()
+        }
+    }
+
+    val game = current
+    if (game == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize().padding(4.dp)) {
+        if (maxWidth > maxHeight) {
+            val tableWidth = maxWidth * 0.55f
+            val rackWidth = maxWidth * 0.45f
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(0.55f).fillMaxHeight()) {
+                    RummikubStatus(game)
+                    RummikubTable(game, tableWidth, viewModel, Modifier.weight(1f))
+                }
+                Column(Modifier.weight(0.45f).fillMaxHeight()) {
+                    RummikubRack(game, byColor, { byColor = it }, rackWidth, viewModel, Modifier.weight(1f))
+                    RummikubActions(game, viewModel)
+                }
+            }
+        } else {
+            val width = maxWidth
+            Column(Modifier.fillMaxSize()) {
+                RummikubStatus(game)
+                RummikubTable(game, width, viewModel, Modifier.weight(1f))
+                RummikubRack(game, byColor, { byColor = it }, width, viewModel, Modifier.heightIn(max = RackHeight + 48.dp))
+                RummikubActions(game, viewModel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RummikubStatus(game: RummikubGame) {
+    val colors = MaterialTheme.colorScheme
+    val players = (1..game.cpus).joinToString(" · ") { "CPU $it ${game.racks[it].size}장" }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+        Text("$players · 더미 ${game.pool.size}장", style = MaterialTheme.typography.bodySmall)
+        val message = when {
+            game.winner == Rummikub.HUMAN -> "이겼습니다! ${formatDuration(game.seconds)} · ${game.humanScore}점"
+            game.winner != null -> "CPU ${game.winner}이(가) 이겼습니다."
+            game.notice.isNotEmpty() -> game.notice
+            game.isHumanTurn -> "내 차례입니다."
+            else -> "CPU ${game.turn} 차례입니다."
+        }
+        Text(
+            message,
+            color = if (game.isFinished) colors.primary else colors.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (game.isFinished) FontWeight.Bold else FontWeight.Normal,
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RummikubTable(game: RummikubGame, width: Dp, viewModel: MainViewModel, modifier: Modifier) {
+    val tileWidth = min(MaxTableTile, width / TABLE_TILES_WIDE)
+    val tileHeight = tileWidth * TILE_RATIO
+    val colors = MaterialTheme.colorScheme
+
+    FlowRow(
+        modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        game.table.forEachIndexed { index, meld ->
+            val valid = Rummikub.isValid(meld)
+            Row(
+                Modifier
+                    .border(
+                        BorderStroke(1.dp, if (valid) colors.outlineVariant else colors.error),
+                        TileShape,
+                    )
+                    .clickable(enabled = game.picked.isNotEmpty()) { viewModel.moveRummikubTo(index) }
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(TileGap),
+            ) {
+                meld.forEach { tile ->
+                    RummikubTileView(tile, game, tileWidth, tileHeight) { viewModel.tapRummikubTile(tile) }
+                }
+            }
+        }
+        if (game.isHumanTurn && game.picked.isNotEmpty()) {
+            Box(
+                Modifier
+                    .size(tileHeight * 2, tileHeight + 6.dp)
+                    .border(1.dp, colors.primary, TileShape)
+                    .clickable(onClick = viewModel::newRummikubMeld),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+ 새 묶음", color = colors.primary, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RummikubRack(
+    game: RummikubGame,
+    byColor: Boolean,
+    onByColorChange: (Boolean) -> Unit,
+    width: Dp,
+    viewModel: MainViewModel,
+    modifier: Modifier,
+) {
+    val tileWidth = min(MaxRackTile, (width - 8.dp) / RACK_TILES_WIDE)
+    val tiles = game.rack.sortedWith(
+        if (byColor) {
+            compareBy({ it.isJoker }, { it.color }, { it.number })
+        } else {
+            compareBy({ it.isJoker }, { it.number }, { it.color })
+        },
+    )
+
+    Column(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "내 패 ${game.rack.size}장",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(horizontal = 4.dp).weight(1f),
+            )
+            if (game.returnable.isNotEmpty()) {
+                TextButton(onClick = viewModel::returnRummikubTiles) { Text("패로 회수") }
+            }
+            FilterChip(!byColor, { onByColorChange(false) }, { Text("숫자") })
+            FilterChip(byColor, { onByColorChange(true) }, { Text("색") }, Modifier.padding(horizontal = 4.dp))
+        }
+        FlowRow(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(TileGap),
+            verticalArrangement = Arrangement.spacedBy(TileGap),
+        ) {
+            tiles.forEach { tile ->
+                RummikubTileView(tile, game, tileWidth, tileWidth * TILE_RATIO) { viewModel.tapRummikubTile(tile) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RummikubActions(game: RummikubGame, viewModel: MainViewModel) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        OutlinedButton(
+            onClick = viewModel::resetRummikubTurn,
+            enabled = game.isHumanTurn && !game.isUntouched,
+            modifier = Modifier.weight(1f),
+        ) { Text("되돌리기", maxLines = 1) }
+        OutlinedButton(
+            onClick = viewModel::drawRummikub,
+            enabled = game.isHumanTurn && game.isUntouched,
+            modifier = Modifier.weight(1f),
+        ) { Text(if (game.pool.isEmpty()) "넘기기" else "뽑기", maxLines = 1) }
+        Button(
+            onClick = viewModel::finishRummikubTurn,
+            enabled = game.isHumanTurn && game.rack.size < game.turnRack.size,
+            modifier = Modifier.weight(1f),
+        ) { Text("완료", maxLines = 1) }
+    }
+}
+
+@Composable
+private fun RummikubTileView(tile: RummikubTile, game: RummikubGame, width: Dp, height: Dp, onClick: () -> Unit) {
+    RummikubTileFace(
+        tile,
+        width,
+        height,
+        picked = tile in game.picked,
+        recent = tile in game.recent && game.isOnTable(tile),
+        modifier = Modifier.clickable(onClick = onClick),
+    )
+}
+
+@Composable
+fun RummikubTileFace(
+    tile: RummikubTile,
+    width: Dp,
+    height: Dp,
+    picked: Boolean = false,
+    recent: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val ink = if (tile.isJoker) JokerInk else TileInks[tile.color]
+
+    Box(
+        modifier
+            .size(width, height)
+            .background(if (picked) TilePicked else TileFace, TileShape)
+            .border(
+                if (recent) 2.dp else 1.dp,
+                if (recent) MaterialTheme.colorScheme.primary else TileLine,
+                TileShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (tile.isJoker) "★" else tile.number.toString(),
+            color = ink,
+            fontSize = with(LocalDensity.current) { (width * 0.55f).toSp() },
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}

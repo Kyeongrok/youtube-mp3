@@ -88,7 +88,7 @@ import kotlinx.coroutines.delay
 // 메뉴 버튼이 목록 끝 항목의 버튼을 가리지 않도록 띄운다.
 internal val ListPadding = PaddingValues(bottom = 88.dp)
 
-private enum class MiniGame { None, Sudoku, Shanghai, FreeCell }
+private enum class MiniGame { None, Sudoku, Shanghai, FreeCell, Rummikub }
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -221,6 +221,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                 MiniGame.Sudoku -> SudokuTopBar(viewModel, onBack = { game = MiniGame.None })
                 MiniGame.Shanghai -> ShanghaiTopBar(viewModel, onBack = { game = MiniGame.None })
                 MiniGame.FreeCell -> FreeCellTopBar(viewModel, onBack = { game = MiniGame.None })
+                MiniGame.Rummikub -> RummikubTopBar(viewModel, onBack = { game = MiniGame.None })
                 MiniGame.None -> TopAppBar(title = { Text("YoutubeMp3") })
             }
         },
@@ -234,6 +235,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                 when (game) {
                     MiniGame.Sudoku -> SudokuScreen(viewModel)
                     MiniGame.Shanghai -> ShanghaiScreen(viewModel)
+                    MiniGame.Rummikub -> RummikubScreen(viewModel)
                     else -> FreeCellScreen(viewModel)
                 }
             }
@@ -294,6 +296,13 @@ private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
                 onClick = {
                     expanded = false
                     onGame(MiniGame.FreeCell)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("루미큐브") },
+                onClick = {
+                    expanded = false
+                    onGame(MiniGame.Rummikub)
                 },
             )
             DropdownMenuItem(

@@ -29,6 +29,7 @@ object AppSettings {
     private const val FILE_NAME = "settings"
     private const val KEY_THEME = "theme"
     private const val KEY_COLOR = "color"
+    private const val KEY_RUMMIKUB_TUTORIAL = "rummikubTutorialSeen"
 
     fun loadTheme(context: Context): ThemeMode {
         val name = preferences(context).getString(KEY_THEME, null)
@@ -46,6 +47,12 @@ object AppSettings {
 
     fun saveColor(context: Context, color: ColorTheme) {
         preferences(context).edit().putString(KEY_COLOR, color.name).apply()
+    }
+
+    fun loadRummikubTutorialSeen(context: Context) = preferences(context).getBoolean(KEY_RUMMIKUB_TUTORIAL, false)
+
+    fun saveRummikubTutorialSeen(context: Context) {
+        preferences(context).edit().putBoolean(KEY_RUMMIKUB_TUTORIAL, true).apply()
     }
 
     private fun preferences(context: Context) = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)

@@ -9,7 +9,9 @@ object SavedGames {
     private const val SUDOKU_FILE = "sudoku-save.json"
     private const val SHANGHAI_FILE = "shanghai-save.json"
     private const val FREECELL_FILE = "freecell-save.json"
+    private const val RUMMIKUB_FILE = "rummikub-save.json"
     private const val SUIT_UNIT = 100
+    private const val NO_WINNER = -1
 
     private fun write(context: Context, name: String, game: JSONObject) {
         RecordFile.write(context, name, JSONArray().put(game))
@@ -95,4 +97,42 @@ object SavedGames {
             item.getJSONArray("foundations").ints(),
         )
     }?.takeUnless { it.isComplete }
+
+    private fun JSONArray.tiles() = ints().map(::RummikubTile)
+
+    private fun tileIds(tiles: List<RummikubTile>) = JSONArray(tiles.map { it.id })
+
+    /** 차례 도중에 옮긴 타일은 저장하지 않고 차례가 시작될 때로 돌아간다. */
+    fun saveRummikub(context: Context, game: RummikubGame) {
+        write(
+            context,
+            RUMMIKUB_FILE,
+            JSONObject()
+                .put("racks", JSONArray(game.racks.map(::tileIds)))
+                .put("table", JSONArray(game.table.map(::tileIds)))
+                .put("pool", tileIds(game.pool))
+                .put("opened", JSONArray(game.opened))
+                .put("turn", game.turn)
+                .put("passes", game.passes)
+                .put("winner", game.winner ?: NO_WINNER)
+                .put("seconds", game.seconds),
+        )
+    }
+
+    fun loadRummikub(context: Context) = read(context, RUMMIKUB_FILE) { item ->
+        val racks = item.getJSONArray("racks")
+        val table = item.getJSONArray("table")
+        val opened = item.getJSONArray("opened")
+        val winner = item.getInt("winner")
+        RummikubGame(
+            racks = List(racks.length()) { racks.getJSONArray(it).tiles() },
+            table = List(table.length()) { table.getJSONArray(it).tiles() },
+            pool = item.getJSONArray("pool").tiles(),
+            opened = List(opened.length()) { opened.getBoolean(it) },
+            turn = item.getInt("turn"),
+            passes = item.getInt("passes"),
+            winner = winner.takeUnless { it == NO_WINNER },
+            seconds = item.getInt("seconds"),
+        )
+    }?.takeUnless { it.isFinished }
 }

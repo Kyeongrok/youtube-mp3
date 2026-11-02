@@ -1,5 +1,6 @@
 package com.kyeongrok.youtubemp3
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -79,15 +80,33 @@ fun RummikubTopBar(viewModel: MainViewModel, onBack: () -> Unit) {
     var cpusOpen by remember { mutableStateOf(false) }
     var recordsOpen by rememberSaveable { mutableStateOf(false) }
     var tutorialOpen by rememberSaveable { mutableStateOf(!viewModel.rummikubTutorialSeen) }
+    val practice by viewModel.rummikubPractice.collectAsStateWithLifecycle()
 
     if (recordsOpen) RummikubRecordsDialog(viewModel, onDismiss = { recordsOpen = false })
     if (tutorialOpen) {
+        val close = {
+            tutorialOpen = false
+            viewModel.markRummikubTutorialSeen()
+        }
         RummikubTutorialDialog(
-            onDismiss = {
-                tutorialOpen = false
-                viewModel.markRummikubTutorialSeen()
+            onDismiss = close,
+            onPractice = {
+                close()
+                viewModel.startRummikubPractice()
             },
         )
+    }
+
+    practice?.let {
+        TopAppBar(
+            title = { Text("연습 ${it.scene + 1} / ${RummikubPractice.SCENE_COUNT}") },
+            navigationIcon = {
+                IconButton(onClick = viewModel::stopRummikubPractice) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "연습 끝내기")
+                }
+            },
+        )
+        return
     }
 
     TopAppBar(
@@ -131,7 +150,9 @@ private fun RummikubRecordsDialog(viewModel: MainViewModel, onDismiss: () -> Uni
 @Composable
 fun RummikubScreen(viewModel: MainViewModel) {
     val current by viewModel.rummikub.collectAsStateWithLifecycle()
+    val practice by viewModel.rummikubPractice.collectAsStateWithLifecycle()
     var byColor by rememberSaveable { mutableStateOf(false) }
+    BackHandler(practice != null) { viewModel.stopRummikubPractice() }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         if (current == null) viewModel.newRummikub(DEFAULT_CPUS)
@@ -152,7 +173,7 @@ fun RummikubScreen(viewModel: MainViewModel) {
         }
     }
 
-    val game = current
+    val game = practice?.game ?: current
     if (game == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -164,7 +185,7 @@ fun RummikubScreen(viewModel: MainViewModel) {
             val rackWidth = maxWidth * 0.45f
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(0.55f).fillMaxHeight()) {
-                    RummikubStatus(game)
+                    practice?.let { RummikubPracticePanel(it, viewModel) } ?: RummikubStatus(game)
                     RummikubTable(game, tableWidth, viewModel, Modifier.weight(1f))
                 }
                 Column(Modifier.weight(0.45f).fillMaxHeight()) {
@@ -175,10 +196,33 @@ fun RummikubScreen(viewModel: MainViewModel) {
         } else {
             val width = maxWidth
             Column(Modifier.fillMaxSize()) {
-                RummikubStatus(game)
+                practice?.let { RummikubPracticePanel(it, viewModel) } ?: RummikubStatus(game)
                 RummikubTable(game, width, viewModel, Modifier.weight(1f))
                 RummikubRack(game, byColor, { byColor = it }, width, viewModel, Modifier.heightIn(max = RackHeight + 48.dp))
                 RummikubActions(game, viewModel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RummikubPracticePanel(practice: RummikubPractice, viewModel: MainViewModel) {
+    val colors = MaterialTheme.colorScheme
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.primaryContainer, TileShape)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(practice.title, color = colors.onPrimaryContainer, fontWeight = FontWeight.Bold)
+        Text(practice.guide, color = colors.onPrimaryContainer)
+        if (practice.game.notice.isNotEmpty()) {
+            Text(practice.game.notice, color = colors.error, style = MaterialTheme.typography.bodySmall)
+        }
+        if (practice.isComplete) {
+            Button(onClick = viewModel::nextRummikubPractice, modifier = Modifier.align(Alignment.End)) {
+                Text(if (practice.isLast) "연습 끝내기" else "다음 연습")
             }
         }
     }
@@ -325,7 +369,7 @@ private fun RummikubTileView(tile: RummikubTile, game: RummikubGame, width: Dp, 
         width,
         height,
         picked = tile in game.picked,
-        recent = tile in game.recent && game.isOnTable(tile),
+        recent = tile in game.recent,
         modifier = Modifier.clickable(onClick = onClick),
     )
 }

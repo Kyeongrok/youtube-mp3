@@ -15,6 +15,12 @@ data class RummikubTile(val id: Int) {
     companion object {
         const val JOKER_START = 104
         const val JOKER_FACE = -1
+        const val RED = 0
+        const val BLUE = 1
+        const val BLACK = 2
+        const val ORANGE = 3
+
+        fun of(color: Int, number: Int) = RummikubTile((color * Rummikub.MAX_NUMBER + number - 1) * 2)
     }
 }
 
@@ -53,8 +59,6 @@ data class RummikubGame(
 
     /** 첫 등록 전에는 내 패에서 낸 타일만 만질 수 있다. */
     private fun canTouch(tile: RummikubTile) = opened[Rummikub.HUMAN] || tile in turnRack
-
-    fun isOnTable(tile: RummikubTile) = table.any { tile in it }
 
     /** 고른 타일 중 이번 차례에 내 패에서 내려놓아 다시 가져올 수 있는 타일이다. */
     val returnable get() = picked.filter { it in turnRack && it !in rack }

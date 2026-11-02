@@ -71,6 +71,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var rummikubSeconds = mutableRummikub.value?.seconds ?: 0
     private var rummikubCpu: Job? = null
 
+    private val mutableRummikubPractice = MutableStateFlow<RummikubPractice?>(null)
+    val rummikubPractice = mutableRummikubPractice.asStateFlow()
+
     private val mutableDeviceTracks = MutableStateFlow<List<Track>>(emptyList())
     val deviceTracks = mutableDeviceTracks.asStateFlow()
 
@@ -339,7 +342,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun tickRummikub() {
-        if (mutableRummikub.value?.isFinished == false) rummikubSeconds++
+        if (mutableRummikubPractice.value == null && mutableRummikub.value?.isFinished == false) rummikubSeconds++
+    }
+
+    fun startRummikubPractice() {
+        mutableRummikubPractice.value = RummikubPractice.start()
+    }
+
+    fun stopRummikubPractice() {
+        mutableRummikubPractice.value = null
+    }
+
+    fun nextRummikubPractice() {
+        mutableRummikubPractice.value = mutableRummikubPractice.value?.next()
+    }
+
+    /** 연습 중에는 진행 중인 게임 대신 연습 판을 바꾼다. */
+    private fun changeRummikub(update: (RummikubGame) -> RummikubGame) {
+        val practice = mutableRummikubPractice.value
+        if (practice != null) {
+            mutableRummikubPractice.value = practice.change(update)
+        } else {
+            mutableRummikub.value = mutableRummikub.value?.let(update)
+        }
     }
 
     fun saveRummikub() {
@@ -348,26 +373,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun tapRummikubTile(tile: RummikubTile) {
-        mutableRummikub.value = mutableRummikub.value?.tapTile(tile)
+        changeRummikub { it.tapTile(tile) }
     }
 
     fun moveRummikubTo(meld: Int) {
-        mutableRummikub.value = mutableRummikub.value?.moveTo(meld)
+        changeRummikub { it.moveTo(meld) }
     }
 
     fun newRummikubMeld() {
-        mutableRummikub.value = mutableRummikub.value?.newMeld()
+        changeRummikub { it.newMeld() }
     }
 
     fun returnRummikubTiles() {
-        mutableRummikub.value = mutableRummikub.value?.returnPicked()
+        changeRummikub { it.returnPicked() }
     }
 
     fun resetRummikubTurn() {
-        mutableRummikub.value = mutableRummikub.value?.resetTurn()
+        changeRummikub { it.resetTurn() }
     }
 
     fun drawRummikub() {
+        mutableRummikubPractice.value?.let {
+            mutableRummikubPractice.value = it.draw()
+            return
+        }
         val game = mutableRummikub.value ?: return
         if (!game.isHumanTurn || !game.isUntouched) return
         finishRummikubTurn(game.draw())
@@ -375,6 +404,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun finishRummikubTurn() {
+        mutableRummikubPractice.value?.let {
+            mutableRummikubPractice.value = it.finishTurn()
+            return
+        }
         val game = mutableRummikub.value ?: return
         val next = game.finishTurn()
         if (game.problem != null) {

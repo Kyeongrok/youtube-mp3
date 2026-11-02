@@ -1,6 +1,7 @@
 package com.kyeongrok.youtubemp3
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -47,6 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -75,11 +77,13 @@ private val JokerInk = Color(0xFF6A1B9A)
 
 private val CpuTileBack = Color(0xFF37474F)
 private val CpuTileEdge = Color(0xFFCFD8DC)
+private val CpuTileDrawn = Color(0xFFFFB300)
 
 private val TileShape = RoundedCornerShape(4.dp)
 private val CpuTileWidth = 14.dp
 private val CpuTileHeight = 19.dp
 private val CpuTileStep = 7.dp
+private val CpuDrawDrop = 12.dp
 private val TileGap = 2.dp
 private val MaxTableTile = 34.dp
 private val MaxRackTile = 44.dp
@@ -89,6 +93,9 @@ private const val TABLE_TILES_WIDE = 13.8f
 private const val RACK_TILES_WIDE = 9.5f
 private const val DEFAULT_CPUS = 2
 private const val BLINK_MILLIS = 500
+private const val CPU_DRAW_MILLIS = 900
+private const val TURN_GLOW_MILLIS = 250
+private const val TURN_GLOW_COUNT = 2
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -275,23 +282,37 @@ private fun RummikubStatus(game: RummikubGame) {
 @Composable
 private fun CpuRack(name: String, count: Int, active: Boolean, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
+    val drawn = remember { Animatable(0f) }
+    var shown by remember { mutableIntStateOf(count) }
+
+    // 1장이 늘었을 때만 뽑은 것이다. 새 게임으로 장수가 바뀌어도 움직이지 않는다.
+    LaunchedEffect(count) {
+        val isDraw = count == shown + 1
+        shown = count
+        if (isDraw) {
+            drawn.snapTo(1f)
+            drawn.animateTo(0f, tween(CPU_DRAW_MILLIS))
+        }
+    }
 
     Column(modifier) {
         Text(
             "$name ${count}장",
-            color = if (active) colors.primary else colors.onSurfaceVariant,
+            color = if (active || drawn.value > 0f) colors.primary else colors.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            fontWeight = if (active || drawn.value > 0f) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1,
         )
         BoxWithConstraints(Modifier.fillMaxWidth().height(CpuTileHeight)) {
             val step = if (count > 1) min(CpuTileStep, (maxWidth - CpuTileWidth) / (count - 1)) else 0.dp
             repeat(count) { index ->
+                // 방금 뽑은 맨 끝 타일은 위에서 내려오며 밝은색에서 원래 색으로 돌아온다.
+                val blend = if (index == count - 1) drawn.value else 0f
                 Box(
                     Modifier
-                        .offset(x = step * index)
+                        .offset(x = step * index, y = -CpuDrawDrop * blend)
                         .size(CpuTileWidth, CpuTileHeight)
-                        .background(CpuTileBack, TileShape)
+                        .background(lerp(CpuTileBack, CpuTileDrawn, blend), TileShape)
                         .border(1.dp, CpuTileEdge, TileShape),
                 )
             }
@@ -364,11 +385,34 @@ private fun RummikubRack(
         },
     )
 
-    Column(modifier.fillMaxWidth()) {
+    val colors = MaterialTheme.colorScheme
+    val myTurn = game.isHumanTurn
+    val glow = remember { Animatable(0f) }
+
+    // 차례가 돌아온 순간 두 번 번쩍여 눈길을 끈다.
+    LaunchedEffect(myTurn) {
+        glow.snapTo(0f)
+        if (myTurn) {
+            repeat(TURN_GLOW_COUNT) {
+                glow.animateTo(1f, tween(TURN_GLOW_MILLIS))
+                glow.animateTo(0f, tween(TURN_GLOW_MILLIS))
+            }
+        }
+    }
+
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(colors.primaryContainer.copy(alpha = glow.value), TileShape)
+            .border(2.dp, if (myTurn) colors.primary else Color.Transparent, TileShape)
+            .padding(4.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "내 패 ${game.rack.size}장",
+                if (myTurn) "내 차례 · 내 패 ${game.rack.size}장" else "내 패 ${game.rack.size}장",
+                color = if (myTurn) colors.primary else Color.Unspecified,
                 style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (myTurn) FontWeight.Bold else FontWeight.Normal,
                 modifier = Modifier.padding(horizontal = 4.dp).weight(1f),
             )
             if (game.returnable.isNotEmpty()) {

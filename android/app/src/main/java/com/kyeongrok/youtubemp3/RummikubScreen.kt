@@ -388,6 +388,8 @@ private fun RummikubRack(
     val colors = MaterialTheme.colorScheme
     val myTurn = game.isHumanTurn
     val glow = remember { Animatable(0f) }
+    val blinkDuration by viewModel.rummikubBlinkDuration.collectAsStateWithLifecycle()
+    val drawnBlinks = rememberDrawnBlink(game, blinkDuration.seconds)
 
     // 차례가 돌아온 순간 두 번 번쩍여 눈길을 끈다.
     LaunchedEffect(myTurn) {
@@ -427,7 +429,9 @@ private fun RummikubRack(
             verticalArrangement = Arrangement.spacedBy(TileGap),
         ) {
             tiles.forEach { tile ->
-                RummikubTileView(tile, game, tileWidth, tileWidth * TILE_RATIO) { viewModel.tapRummikubTile(tile) }
+                RummikubTileView(tile, game, tileWidth, tileWidth * TILE_RATIO, drawnBlinks) {
+                    viewModel.tapRummikubTile(tile)
+                }
             }
         }
     }
@@ -458,7 +462,14 @@ private fun RummikubActions(game: RummikubGame, viewModel: MainViewModel) {
 }
 
 @Composable
-private fun RummikubTileView(tile: RummikubTile, game: RummikubGame, width: Dp, height: Dp, onClick: () -> Unit) {
+private fun RummikubTileView(
+    tile: RummikubTile,
+    game: RummikubGame,
+    width: Dp,
+    height: Dp,
+    drawnBlinks: Boolean = false,
+    onClick: () -> Unit,
+) {
     RummikubTileFace(
         tile,
         width,
@@ -466,9 +477,25 @@ private fun RummikubTileView(tile: RummikubTile, game: RummikubGame, width: Dp, 
         picked = tile in game.picked,
         recent = tile in game.recent,
         // 판으로 옮긴 타일은 더 깜빡이지 않고, 패로 회수하면 다시 깜빡인다.
-        blinking = tile == game.drawn && tile in game.rack,
+        blinking = drawnBlinks && tile == game.drawn && tile in game.rack,
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+/**
+ * 뽑은 타일을 아직 깜빡일지 정한다. 시간은 컴퓨터 차례가 끝나 내 차례가 시작될 때부터 잰다.
+ * seconds가 null이면 차례를 마칠 때까지 깜빡인다.
+ */
+@Composable
+private fun rememberDrawnBlink(game: RummikubGame, seconds: Int?): Boolean {
+    var expired by remember(game.drawn) { mutableStateOf(false) }
+    LaunchedEffect(game.drawn, game.isHumanTurn, seconds) {
+        if (seconds != null && game.drawn != null && game.isHumanTurn) {
+            delay(seconds * 1000L)
+            expired = true
+        }
+    }
+    return seconds == null || !expired
 }
 
 @Composable

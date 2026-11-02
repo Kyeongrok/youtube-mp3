@@ -19,6 +19,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ColorScheme
@@ -46,7 +49,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,8 +88,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 
-// 메뉴 버튼이 목록 끝 항목의 버튼을 가리지 않도록 띄운다.
-internal val ListPadding = PaddingValues(bottom = 88.dp)
+// 목록 끝 항목이 화면 아래에 붙지 않도록 조금 띄운다.
+internal val ListPadding = PaddingValues(bottom = 16.dp)
 
 private enum class MiniGame { None, Sudoku, Shanghai, FreeCell, Rummikub }
 
@@ -222,13 +225,23 @@ private fun MainScreen(viewModel: MainViewModel) {
                 MiniGame.Shanghai -> ShanghaiTopBar(viewModel, onBack = { game = MiniGame.None })
                 MiniGame.FreeCell -> FreeCellTopBar(viewModel, onBack = { game = MiniGame.None })
                 MiniGame.Rummikub -> RummikubTopBar(viewModel, onBack = { game = MiniGame.None })
-                MiniGame.None -> TopAppBar(title = { Text("YoutubeMp3") })
+                MiniGame.None -> TopAppBar(
+                    navigationIcon = { MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true }) },
+                    title = {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text("YoutubeMp3")
+                            Text(
+                                "v${BuildConfig.VERSION_NAME}",
+                                Modifier.padding(start = 8.dp, bottom = 2.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                    },
+                )
             }
         },
         bottomBar = { PlayerBar() },
-        floatingActionButton = {
-            if (game == MiniGame.None) MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true })
-        },
     ) { padding ->
         if (game != MiniGame.None) {
             Column(Modifier.padding(padding).fillMaxSize()) {
@@ -273,40 +286,29 @@ private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
     Box {
-        FloatingActionButton(onClick = { expanded = true }) {
+        IconButton(onClick = { expanded = true }) {
             Icon(Icons.Filled.Menu, contentDescription = "메뉴")
         }
         DropdownMenu(expanded, { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("스도쿠") },
-                onClick = {
-                    expanded = false
-                    onGame(MiniGame.Sudoku)
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("상하이") },
-                onClick = {
-                    expanded = false
-                    onGame(MiniGame.Shanghai)
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("프리셀") },
-                onClick = {
-                    expanded = false
-                    onGame(MiniGame.FreeCell)
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("루미큐브") },
-                onClick = {
-                    expanded = false
-                    onGame(MiniGame.Rummikub)
-                },
-            )
+            listOf(
+                Triple("스도쿠", AppIcons.Sudoku, MiniGame.Sudoku),
+                Triple("상하이", AppIcons.Shanghai, MiniGame.Shanghai),
+                Triple("프리셀", AppIcons.FreeCell, MiniGame.FreeCell),
+                Triple("루미큐브", AppIcons.Rummikub, MiniGame.Rummikub),
+            ).forEach { (label, icon, target) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    leadingIcon = { Icon(icon, contentDescription = null) },
+                    onClick = {
+                        expanded = false
+                        onGame(target)
+                    },
+                )
+            }
+            HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("설정") },
+                leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                 onClick = {
                     expanded = false
                     onSettings()
@@ -316,11 +318,13 @@ private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SettingsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
     val tableSize by viewModel.rummikubTableSize.collectAsStateWithLifecycle()
+    val blinkDuration by viewModel.rummikubBlinkDuration.collectAsStateWithLifecycle()
     val dark = isDarkTheme(themeMode)
 
     AlertDialog(
@@ -361,6 +365,20 @@ private fun SettingsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
                             selected = size == tableSize,
                             onClick = { viewModel.setRummikubTableSize(size) },
                             label = { Text(size.label, maxLines = 1) },
+                        )
+                    }
+                }
+                Text(
+                    "루미큐브 뽑은 타일 깜빡임",
+                    Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RummikubBlinkDuration.entries.forEach { duration ->
+                        FilterChip(
+                            selected = duration == blinkDuration,
+                            onClick = { viewModel.setRummikubBlinkDuration(duration) },
+                            label = { Text(duration.label, maxLines = 1) },
                         )
                     }
                 }
@@ -524,11 +542,21 @@ private fun PlayerBar() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(track.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (state.queueSize > 1) {
-                    TextButton(onClick = Player::previous, enabled = state.queueIndex > 0) { Text("이전") }
+                    IconButton(onClick = Player::previous, enabled = state.queueIndex > 0) {
+                        Icon(AppIcons.SkipPrevious, contentDescription = "이전")
+                    }
                 }
-                TextButton(onClick = Player::togglePause) { Text(if (state.isPlaying) "일시정지" else "재생") }
+                FilledIconButton(onClick = Player::togglePause) {
+                    if (state.isPlaying) {
+                        Icon(AppIcons.Pause, contentDescription = "일시정지")
+                    } else {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = "재생")
+                    }
+                }
                 if (state.queueSize > 1) {
-                    TextButton(onClick = Player::next, enabled = state.queueIndex < state.queueSize - 1) { Text("다음") }
+                    IconButton(onClick = Player::next, enabled = state.queueIndex < state.queueSize - 1) {
+                        Icon(AppIcons.SkipNext, contentDescription = "다음")
+                    }
                 }
             }
             Slider(

@@ -33,12 +33,22 @@ enum class RummikubTableSize(val label: String, val scale: Float) {
     Largest("최대", 1.6f),
 }
 
+/** 루미큐브에서 뽑은 타일이 내 차례가 시작된 뒤 깜빡이는 시간. null이면 차례를 마칠 때까지 깜빡인다. */
+enum class RummikubBlinkDuration(val label: String, val seconds: Int?) {
+    Three("3초", 3),
+    Five("5초", 5),
+    Ten("10초", 10),
+    Thirty("30초", 30),
+    Always("계속", null),
+}
+
 object AppSettings {
     private const val FILE_NAME = "settings"
     private const val KEY_THEME = "theme"
     private const val KEY_COLOR = "color"
     private const val KEY_RUMMIKUB_TUTORIAL = "rummikubTutorialSeen"
     private const val KEY_RUMMIKUB_TABLE_SIZE = "rummikubTableSize"
+    private const val KEY_RUMMIKUB_BLINK = "rummikubBlinkDuration"
 
     fun loadTheme(context: Context): ThemeMode {
         val name = preferences(context).getString(KEY_THEME, null)
@@ -71,6 +81,15 @@ object AppSettings {
 
     fun saveRummikubTableSize(context: Context, size: RummikubTableSize) {
         preferences(context).edit().putString(KEY_RUMMIKUB_TABLE_SIZE, size.name).apply()
+    }
+
+    fun loadRummikubBlinkDuration(context: Context): RummikubBlinkDuration {
+        val name = preferences(context).getString(KEY_RUMMIKUB_BLINK, null)
+        return RummikubBlinkDuration.entries.find { it.name == name } ?: RummikubBlinkDuration.Ten
+    }
+
+    fun saveRummikubBlinkDuration(context: Context, duration: RummikubBlinkDuration) {
+        preferences(context).edit().putString(KEY_RUMMIKUB_BLINK, duration.name).apply()
     }
 
     private fun preferences(context: Context) = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)

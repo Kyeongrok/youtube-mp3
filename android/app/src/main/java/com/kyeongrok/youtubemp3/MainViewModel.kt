@@ -43,6 +43,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableRummikubTableSize = MutableStateFlow(AppSettings.loadRummikubTableSize(application))
     val rummikubTableSize = mutableRummikubTableSize.asStateFlow()
 
+    private val mutableRummikubBlinkDuration = MutableStateFlow(AppSettings.loadRummikubBlinkDuration(application))
+    val rummikubBlinkDuration = mutableRummikubBlinkDuration.asStateFlow()
+
     private val mutableSudoku = MutableStateFlow(SavedGames.loadSudoku(application))
     val sudoku = mutableSudoku.asStateFlow()
 
@@ -106,6 +109,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setRummikubTableSize(size: RummikubTableSize) {
         mutableRummikubTableSize.value = size
         AppSettings.saveRummikubTableSize(getApplication(), size)
+    }
+
+    fun setRummikubBlinkDuration(duration: RummikubBlinkDuration) {
+        mutableRummikubBlinkDuration.value = duration
+        AppSettings.saveRummikubBlinkDuration(getApplication(), duration)
     }
 
     fun installUpdate() {
@@ -175,6 +183,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val id = System.currentTimeMillis()
         savePlaylists(mutablePlaylists.value + Playlist(id, name, emptyList()))
         return id
+    }
+
+    fun renamePlaylist(id: Long, name: String) {
+        savePlaylists(mutablePlaylists.value.map { if (it.id == id) it.copy(name = name) else it })
+    }
+
+    /** 이미 들어 있는 곡이면 false를 돌려준다. */
+    fun addPlaylistTrack(id: Long, trackId: Long): Boolean {
+        val playlist = mutablePlaylists.value.find { it.id == id } ?: return false
+        if (trackId in playlist.trackIds) return false
+        updatePlaylistTracks(id) { it + trackId }
+        return true
     }
 
     fun deletePlaylist(id: Long) {

@@ -8,12 +8,14 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,13 +27,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -111,7 +120,7 @@ fun PlaylistTab(viewModel: MainViewModel) {
             ) { Text(if (denied) "설정에서 음악 접근 허용하기" else "기기의 모든 음악을 쓰려면 접근 허용하기") }
         }
         when {
-            openId == RECENT_ID -> RecentTracks(deviceTracks, onBack = { openId = null })
+            openId == RECENT_ID -> RecentTracks(deviceTracks, playlists, viewModel, onBack = { openId = null })
             open == null -> PlaylistList(playlists, viewModel, onOpen = { openId = it })
             else -> PlaylistDetail(open, deviceTracks, viewModel, onBack = { openId = null })
         }
@@ -144,9 +153,11 @@ private fun PlaylistList(playlists: List<Playlist>, viewModel: MainViewModel, on
     }
 
     if (creating) {
-        NewPlaylistDialog(
+        PlaylistNameDialog(
+            title = "새 재생목록",
+            confirmLabel = "만들기",
             onDismiss = { creating = false },
-            onCreate = {
+            onConfirm = {
                 creating = false
                 onOpen(viewModel.createPlaylist(it))
             },
@@ -154,11 +165,16 @@ private fun PlaylistList(playlists: List<Playlist>, viewModel: MainViewModel, on
     }
 }
 
-/** 기기에 추가된 순서대로 자동으로 채워지는 목록이라 곡을 고치는 버튼은 없다. */
+/**
+ * 기기에 추가된 순서대로 자동으로 채워지는 목록이라 순서를 고치는 버튼은 없다.
+ * 곡을 누르면 재생하거나 재생목록에 넣는 메뉴가 나온다.
+ */
 @Composable
-private fun RecentTracks(deviceTracks: List<Track>, onBack: () -> Unit) {
+private fun RecentTracks(deviceTracks: List<Track>, playlists: List<Playlist>, viewModel: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val tracks = deviceTracks.sortedByDescending { it.dateAdded }.take(RECENT_LIMIT)
+    var menuFor by remember { mutableStateOf<Long?>(null) }
+    var adding by remember { mutableStateOf<Track?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -174,30 +190,119 @@ private fun RecentTracks(deviceTracks: List<Track>, onBack: () -> Unit) {
         ) { Text("전체 재생") }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
             itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-                Text(
-                    track.title,
-                    Modifier.fillMaxWidth().clickable { Player.play(context, tracks, index) }.padding(16.dp),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Box {
+                    Text(
+                        track.title,
+                        Modifier.fillMaxWidth().clickable { menuFor = track.id }.padding(16.dp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    DropdownMenu(menuFor == track.id, { menuFor = null }) {
+                        DropdownMenuItem(
+                            text = { Text("재생") },
+                            leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                            onClick = {
+                                menuFor = null
+                                Player.play(context, tracks, index)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("재생목록에 추가") },
+                            leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                            onClick = {
+                                menuFor = null
+                                adding = track
+                            },
+                        )
+                    }
+                }
                 HorizontalDivider()
             }
         }
     }
+
+    adding?.let { track ->
+        AddToPlaylistDialog(
+            track,
+            playlists,
+            viewModel,
+            onDone = { adding = null },
+        )
+    }
+}
+
+/** 곡을 넣을 재생목록을 고른다. 목록이 없거나 새로 만들고 싶으면 이름을 받아 만든 뒤 넣는다. */
+@Composable
+private fun AddToPlaylistDialog(track: Track, playlists: List<Playlist>, viewModel: MainViewModel, onDone: () -> Unit) {
+    val context = LocalContext.current
+    var creating by remember { mutableStateOf(false) }
+    val add = { id: Long, name: String ->
+        val added = viewModel.addPlaylistTrack(id, track.id)
+        val message = if (added) "'$name'에 추가했습니다." else "'$name'에 이미 있는 곡입니다."
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        onDone()
+    }
+
+    if (creating) {
+        PlaylistNameDialog(
+            title = "새 재생목록",
+            confirmLabel = "만들고 추가",
+            onDismiss = onDone,
+            onConfirm = { name -> add(viewModel.createPlaylist(name), name) },
+        )
+        return
+    }
+
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text("재생목록에 추가") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                items(playlists, key = { it.id }) { playlist ->
+                    Text(
+                        playlist.name,
+                        Modifier.fillMaxWidth().clickable { add(playlist.id, playlist.name) }.padding(vertical = 14.dp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    HorizontalDivider()
+                }
+                item {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Text("새 재생목록", Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDone) { Text("취소") } },
+    )
 }
 
 @Composable
-private fun NewPlaylistDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
-    var name by rememberSaveable { mutableStateOf("") }
+private fun PlaylistNameDialog(
+    title: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+    initial: String = "",
+) {
+    // 이름을 고칠 때 바로 이어서 쓸 수 있도록 커서를 끝에 둔다.
+    var name by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(initial, TextRange(initial.length)))
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("새 재생목록") },
+        title = { Text(title) },
         text = {
             OutlinedTextField(name, { name = it }, label = { Text("이름") }, singleLine = true)
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(name.trim()) }, enabled = name.isNotBlank()) { Text("만들기") }
+            TextButton(onClick = { onConfirm(name.text.trim()) }, enabled = name.text.isNotBlank()) { Text(confirmLabel) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
@@ -212,6 +317,7 @@ private fun PlaylistDetail(
 ) {
     var picking by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
+    var renaming by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val tracksById = deviceTracks.associateBy { it.id }
     val tracks = playlist.trackIds.mapNotNull(tracksById::get)
@@ -222,6 +328,9 @@ private fun PlaylistDetail(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
             }
             Text(playlist.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            IconButton(onClick = { renaming = true }) {
+                Icon(Icons.Filled.Edit, contentDescription = "이름 바꾸기")
+            }
             IconButton(onClick = { deleting = true }) {
                 Icon(Icons.Filled.Delete, contentDescription = "재생목록 삭제")
             }
@@ -263,6 +372,18 @@ private fun PlaylistDetail(
             onConfirm = {
                 picking = false
                 viewModel.choosePlaylistTracks(playlist.id, it)
+            },
+        )
+    }
+    if (renaming) {
+        PlaylistNameDialog(
+            title = "이름 바꾸기",
+            confirmLabel = "바꾸기",
+            initial = playlist.name,
+            onDismiss = { renaming = false },
+            onConfirm = {
+                renaming = false
+                viewModel.renamePlaylist(playlist.id, it)
             },
         )
     }

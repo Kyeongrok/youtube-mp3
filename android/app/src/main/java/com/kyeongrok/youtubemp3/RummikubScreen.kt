@@ -1,6 +1,11 @@
 package com.kyeongrok.youtubemp3
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,7 +20,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -48,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -60,11 +68,18 @@ import kotlinx.coroutines.launch
 
 private val TileFace = Color.White
 private val TilePicked = Color(0xFFFFF59D)
+private val TileDrawn = Color(0xFF80DEEA)
 private val TileLine = Color(0xFF8A8A8A)
 private val TileInks = listOf(Color(0xFFC62828), Color(0xFF1565C0), Color(0xFF212121), Color(0xFFEF6C00))
 private val JokerInk = Color(0xFF6A1B9A)
 
+private val CpuTileBack = Color(0xFF37474F)
+private val CpuTileEdge = Color(0xFFCFD8DC)
+
 private val TileShape = RoundedCornerShape(4.dp)
+private val CpuTileWidth = 14.dp
+private val CpuTileHeight = 19.dp
+private val CpuTileStep = 7.dp
 private val TileGap = 2.dp
 private val MaxTableTile = 34.dp
 private val MaxRackTile = 44.dp
@@ -73,6 +88,7 @@ private const val TILE_RATIO = 1.35f
 private const val TABLE_TILES_WIDE = 13.8f
 private const val RACK_TILES_WIDE = 9.5f
 private const val DEFAULT_CPUS = 2
+private const val BLINK_MILLIS = 500
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -231,10 +247,14 @@ private fun RummikubPracticePanel(practice: RummikubPractice, viewModel: MainVie
 @Composable
 private fun RummikubStatus(game: RummikubGame) {
     val colors = MaterialTheme.colorScheme
-    val players = (1..game.cpus).joinToString(" · ") { "CPU $it ${game.racks[it].size}장" }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-        Text("$players · 더미 ${game.pool.size}장", style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            for (cpu in 1..game.cpus) {
+                CpuRack("CPU $cpu", game.racks[cpu].size, game.turn == cpu && !game.isFinished, Modifier.weight(1f))
+            }
+        }
+        Text("더미 ${game.pool.size}장", Modifier.padding(top = 2.dp), style = MaterialTheme.typography.bodySmall)
         val message = when {
             game.winner == Rummikub.HUMAN -> "이겼습니다! ${formatDuration(game.seconds)} · ${game.humanScore}점"
             game.winner != null -> "CPU ${game.winner}이(가) 이겼습니다."
@@ -251,10 +271,39 @@ private fun RummikubStatus(game: RummikubGame) {
     }
 }
 
+/** 컴퓨터의 패를 뒤집힌 타일로 겹쳐 보여 준다. 타일이 많으면 칸에 맞게 더 겹친다. */
+@Composable
+private fun CpuRack(name: String, count: Int, active: Boolean, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+
+    Column(modifier) {
+        Text(
+            "$name ${count}장",
+            color = if (active) colors.primary else colors.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+        )
+        BoxWithConstraints(Modifier.fillMaxWidth().height(CpuTileHeight)) {
+            val step = if (count > 1) min(CpuTileStep, (maxWidth - CpuTileWidth) / (count - 1)) else 0.dp
+            repeat(count) { index ->
+                Box(
+                    Modifier
+                        .offset(x = step * index)
+                        .size(CpuTileWidth, CpuTileHeight)
+                        .background(CpuTileBack, TileShape)
+                        .border(1.dp, CpuTileEdge, TileShape),
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RummikubTable(game: RummikubGame, width: Dp, viewModel: MainViewModel, modifier: Modifier) {
-    val tileWidth = min(MaxTableTile, width / TABLE_TILES_WIDE)
+    val tableSize by viewModel.rummikubTableSize.collectAsStateWithLifecycle()
+    val tileWidth = min(MaxTableTile, width / TABLE_TILES_WIDE) * tableSize.scale
     val tileHeight = tileWidth * TILE_RATIO
     val colors = MaterialTheme.colorScheme
 
@@ -265,7 +314,8 @@ private fun RummikubTable(game: RummikubGame, width: Dp, viewModel: MainViewMode
     ) {
         game.table.forEachIndexed { index, meld ->
             val valid = Rummikub.isValid(meld)
-            Row(
+            // 타일을 크게 하면 긴 묶음이 한 줄을 넘으므로 다음 줄로 내린다.
+            FlowRow(
                 Modifier
                     .border(
                         BorderStroke(1.dp, if (valid) colors.outlineVariant else colors.error),
@@ -274,6 +324,7 @@ private fun RummikubTable(game: RummikubGame, width: Dp, viewModel: MainViewMode
                     .clickable(enabled = game.picked.isNotEmpty()) { viewModel.moveRummikubTo(index) }
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(TileGap),
+                verticalArrangement = Arrangement.spacedBy(TileGap),
             ) {
                 meld.forEach { tile ->
                     RummikubTileView(tile, game, tileWidth, tileHeight) { viewModel.tapRummikubTile(tile) }
@@ -370,8 +421,22 @@ private fun RummikubTileView(tile: RummikubTile, game: RummikubGame, width: Dp, 
         height,
         picked = tile in game.picked,
         recent = tile in game.recent,
+        // 판으로 옮긴 타일은 더 깜빡이지 않고, 패로 회수하면 다시 깜빡인다.
+        blinking = tile == game.drawn && tile in game.rack,
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+@Composable
+private fun rememberBlink(): Float {
+    val transition = rememberInfiniteTransition(label = "drawnTile")
+    val blink by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(BLINK_MILLIS), RepeatMode.Reverse),
+        label = "drawnTileBlink",
+    )
+    return blink
 }
 
 @Composable
@@ -381,17 +446,20 @@ fun RummikubTileFace(
     height: Dp,
     picked: Boolean = false,
     recent: Boolean = false,
+    blinking: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val ink = if (tile.isJoker) JokerInk else TileInks[tile.color]
+    val blink = if (blinking) rememberBlink() else 0f
+    val highlighted = recent || blinking
 
     Box(
         modifier
             .size(width, height)
-            .background(if (picked) TilePicked else TileFace, TileShape)
+            .background(if (picked) TilePicked else lerp(TileFace, TileDrawn, blink), TileShape)
             .border(
-                if (recent) 2.dp else 1.dp,
-                if (recent) MaterialTheme.colorScheme.primary else TileLine,
+                if (highlighted) 2.dp else 1.dp,
+                if (highlighted) MaterialTheme.colorScheme.primary else TileLine,
                 TileShape,
             ),
         contentAlignment = Alignment.Center,

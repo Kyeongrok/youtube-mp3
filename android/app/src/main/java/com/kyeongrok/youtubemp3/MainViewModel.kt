@@ -40,6 +40,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableColorTheme = MutableStateFlow(AppSettings.loadColor(application))
     val colorTheme = mutableColorTheme.asStateFlow()
 
+    private val mutableRummikubTableSize = MutableStateFlow(AppSettings.loadRummikubTableSize(application))
+    val rummikubTableSize = mutableRummikubTableSize.asStateFlow()
+
     private val mutableSudoku = MutableStateFlow(SavedGames.loadSudoku(application))
     val sudoku = mutableSudoku.asStateFlow()
 
@@ -98,6 +101,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setColorTheme(color: ColorTheme) {
         mutableColorTheme.value = color
         AppSettings.saveColor(getApplication(), color)
+    }
+
+    fun setRummikubTableSize(size: RummikubTableSize) {
+        mutableRummikubTableSize.value = size
+        AppSettings.saveRummikubTableSize(getApplication(), size)
     }
 
     fun installUpdate() {

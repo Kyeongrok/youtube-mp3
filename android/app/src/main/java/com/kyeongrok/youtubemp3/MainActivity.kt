@@ -320,6 +320,7 @@ private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
 private fun SettingsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
+    val tableSize by viewModel.rummikubTableSize.collectAsStateWithLifecycle()
     val dark = isDarkTheme(themeMode)
 
     AlertDialog(
@@ -347,6 +348,20 @@ private fun SettingsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
                         ColorTheme.entries.forEach { color ->
                             ColorSwatch(color, color == colorTheme) { viewModel.setColorTheme(color) }
                         }
+                    }
+                }
+                Text(
+                    "루미큐브 판 타일 크기",
+                    Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RummikubTableSize.entries.forEach { size ->
+                        FilterChip(
+                            selected = size == tableSize,
+                            onClick = { viewModel.setRummikubTableSize(size) },
+                            label = { Text(size.label, maxLines = 1) },
+                        )
                     }
                 }
             }

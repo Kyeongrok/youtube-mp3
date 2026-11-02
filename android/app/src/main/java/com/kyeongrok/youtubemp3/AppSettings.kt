@@ -25,11 +25,20 @@ enum class ColorTheme(
     Pink("분홍", 0xFFB0276D, 0xFFFFD9E3, 0xFF3E001E, 0xFFF9DBE3, 0xFFFFFBFF, 0xFFF3DDE1),
 }
 
+/** 루미큐브 판 타일의 크기. 배율은 화면 폭에 맞춘 기본 크기에 곱한다. */
+enum class RummikubTableSize(val label: String, val scale: Float) {
+    Small("작게", 0.8f),
+    Medium("보통", 1f),
+    Large("크게", 1.3f),
+    Largest("최대", 1.6f),
+}
+
 object AppSettings {
     private const val FILE_NAME = "settings"
     private const val KEY_THEME = "theme"
     private const val KEY_COLOR = "color"
     private const val KEY_RUMMIKUB_TUTORIAL = "rummikubTutorialSeen"
+    private const val KEY_RUMMIKUB_TABLE_SIZE = "rummikubTableSize"
 
     fun loadTheme(context: Context): ThemeMode {
         val name = preferences(context).getString(KEY_THEME, null)
@@ -53,6 +62,15 @@ object AppSettings {
 
     fun saveRummikubTutorialSeen(context: Context) {
         preferences(context).edit().putBoolean(KEY_RUMMIKUB_TUTORIAL, true).apply()
+    }
+
+    fun loadRummikubTableSize(context: Context): RummikubTableSize {
+        val name = preferences(context).getString(KEY_RUMMIKUB_TABLE_SIZE, null)
+        return RummikubTableSize.entries.find { it.name == name } ?: RummikubTableSize.Medium
+    }
+
+    fun saveRummikubTableSize(context: Context, size: RummikubTableSize) {
+        preferences(context).edit().putString(KEY_RUMMIKUB_TABLE_SIZE, size.name).apply()
     }
 
     private fun preferences(context: Context) = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)

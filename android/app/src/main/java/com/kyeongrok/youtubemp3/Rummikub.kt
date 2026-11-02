@@ -37,6 +37,8 @@ data class RummikubGame(
     val picked: Set<RummikubTile> = emptySet(),
     /** 내 차례가 끝난 뒤 컴퓨터가 내려놓은 타일이다. */
     val recent: Set<RummikubTile> = emptySet(),
+    /** 내가 가장 최근에 뽑은 타일이다. 다음 차례를 마칠 때까지 기억한다. */
+    val drawn: RummikubTile? = null,
     val turnRack: List<RummikubTile> = racks[Rummikub.HUMAN],
     val turnTable: List<List<RummikubTile>> = table,
 ) {
@@ -120,6 +122,7 @@ data class RummikubGame(
             passes = 0,
             picked = emptySet(),
             recent = emptySet(),
+            drawn = null,
             notice = "",
         ).afterTurn()
     }
@@ -127,7 +130,9 @@ data class RummikubGame(
     /** 뽑을 타일이 없으면 차례만 넘긴다. */
     fun draw(): RummikubGame {
         if (!isHumanTurn || !isUntouched) return this
-        return copy(picked = emptySet(), recent = emptySet(), notice = "").drawFor(turn).afterTurn()
+        return copy(picked = emptySet(), recent = emptySet(), drawn = pool.firstOrNull(), notice = "")
+            .drawFor(turn)
+            .afterTurn()
     }
 
     fun cpuTurn(): RummikubGame {

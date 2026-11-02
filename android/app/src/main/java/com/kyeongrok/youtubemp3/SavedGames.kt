@@ -10,6 +10,7 @@ object SavedGames {
     private const val SHANGHAI_FILE = "shanghai-save.json"
     private const val FREECELL_FILE = "freecell-save.json"
     private const val RUMMIKUB_FILE = "rummikub-save.json"
+    private const val SPLENDOR_FILE = "splendor-save.json"
     private const val SUIT_UNIT = 100
     private const val NO_WINNER = -1
 
@@ -133,6 +134,66 @@ object SavedGames {
             passes = item.getInt("passes"),
             winner = winner.takeUnless { it == NO_WINNER },
             seconds = item.getInt("seconds"),
+        )
+    }?.takeUnless { it.isFinished }
+
+    private fun JSONArray.nullableInts() = List(length()) { if (isNull(it)) null else getInt(it) }
+
+    private fun nullable(values: List<Int?>) = JSONArray().apply { values.forEach { put(it ?: JSONObject.NULL) } }
+
+    /** 고르던 보석은 저장하지 않는다. */
+    fun saveSplendor(context: Context, game: SplendorGame) {
+        write(
+            context,
+            SPLENDOR_FILE,
+            JSONObject()
+                .put(
+                    "players",
+                    JSONArray(
+                        game.players.map { player ->
+                            JSONObject()
+                                .put("tokens", JSONArray(player.tokens))
+                                .put("cards", JSONArray(player.cards))
+                                .put("reserved", JSONArray(player.reserved))
+                                .put("nobles", JSONArray(player.nobles))
+                        },
+                    ),
+                )
+                .put("bank", JSONArray(game.bank))
+                .put("decks", JSONArray(game.decks.map { JSONArray(it) }))
+                .put("market", JSONArray(game.market.map(::nullable)))
+                .put("nobles", JSONArray(game.nobles))
+                .put("turn", game.turn)
+                .put("winner", game.winner ?: NO_WINNER)
+                .put("seconds", game.seconds)
+                .put("log", JSONArray(game.log)),
+        )
+    }
+
+    fun loadSplendor(context: Context) = read(context, SPLENDOR_FILE) { item ->
+        val players = item.getJSONArray("players")
+        val decks = item.getJSONArray("decks")
+        val market = item.getJSONArray("market")
+        val log = item.getJSONArray("log")
+        val winner = item.getInt("winner")
+        SplendorGame(
+            players = List(players.length()) { index ->
+                val player = players.getJSONObject(index)
+                SplendorPlayer(
+                    player.getJSONArray("tokens").ints(),
+                    player.getJSONArray("cards").ints(),
+                    player.getJSONArray("reserved").ints(),
+                    player.getJSONArray("nobles").ints(),
+                )
+            },
+            bank = item.getJSONArray("bank").ints(),
+            decks = List(decks.length()) { decks.getJSONArray(it).ints() },
+            market = List(market.length()) { market.getJSONArray(it).nullableInts() },
+            nobles = item.getJSONArray("nobles").ints(),
+            turn = item.getInt("turn"),
+            winner = winner.takeUnless { it == NO_WINNER },
+            seconds = item.getInt("seconds"),
+            log = List(log.length()) { log.getString(it) },
         )
     }?.takeUnless { it.isFinished }
 }

@@ -72,6 +72,14 @@ object AppIcons {
         }
     }
 
+    /** 위가 깎인 보석. 윗면과 아랫면 사이를 가는 틈으로 나눈다. */
+    val Splendor: ImageVector = materialIcon("App.Splendor") {
+        materialPath {
+            moveTo(6f, 3f); horizontalLineTo(18f); lineTo(22f, 8.5f); horizontalLineTo(2f); close()
+            moveTo(2f, 10f); horizontalLineTo(22f); lineTo(12f, 21.5f); close()
+        }
+    }
+
     /** 나란히 놓인 타일 세 장. */
     val Rummikub: ImageVector = materialIcon("App.Rummikub") {
         materialPath {

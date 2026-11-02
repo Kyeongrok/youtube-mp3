@@ -80,6 +80,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableRummikubPractice = MutableStateFlow<RummikubPractice?>(null)
     val rummikubPractice = mutableRummikubPractice.asStateFlow()
 
+    private val mutableSplendor = MutableStateFlow(SavedGames.loadSplendor(application))
+    val splendor = mutableSplendor.asStateFlow()
+
+    private val mutableSplendorRecords = MutableStateFlow(SplendorRecords.load(application))
+    val splendorRecords = mutableSplendorRecords.asStateFlow()
+
+    private var splendorSeconds = mutableSplendor.value?.seconds ?: 0
+    private var splendorCpu: Job? = null
+
     private val mutableDeviceTracks = MutableStateFlow<List<Track>>(emptyList())
     val deviceTracks = mutableDeviceTracks.asStateFlow()
 
@@ -467,6 +476,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             RummikubRecords.save(getApplication(), mutableRummikubRecords.value)
         }
         saveRummikub()
+    }
+
+    fun newSplendor(cpus: Int) {
+        splendorCpu?.cancel()
+        mutableSplendor.value = Splendor.deal(cpus)
+        splendorSeconds = 0
+        saveSplendor()
+    }
+
+    fun tickSplendor() {
+        if (mutableSplendor.value?.isFinished == false) splendorSeconds++
+    }
+
+    fun saveSplendor() {
+        val game = mutableSplendor.value ?: return
+        SavedGames.saveSplendor(getApplication(), game.copy(seconds = splendorSeconds))
+    }
+
+    fun tapSplendorGem(color: Int) {
+        mutableSplendor.value = mutableSplendor.value?.tapGem(color)
+    }
+
+    fun clearSplendorGems() {
+        mutableSplendor.value = mutableSplendor.value?.clearPicked()
+    }
+
+    fun takeSplendorGems() = playSplendor { it.takePicked() }
+
+    fun buySplendor(cardId: Int) = playSplendor { it.buy(cardId) }
+
+    fun reserveSplendor(cardId: Int?, tier: Int) = playSplendor { it.reserve(cardId, tier) }
+
+    fun discardSplendor(color: Int) = playSplendor { it.discard(color) }
+
+    private fun playSplendor(action: (SplendorGame) -> SplendorGame) {
+        val game = mutableSplendor.value ?: return
+        finishSplendorTurn(action(game))
+        resumeSplendor()
+    }
+
+    /** 컴퓨터 차례면 내 차례가 돌아올 때까지 하나씩 둔다. */
+    fun resumeSplendor() {
+        if (splendorCpu?.isActive == true) return
+        splendorCpu = viewModelScope.launch {
+            while (true) {
+                val game = mutableSplendor.value ?: break
+                if (game.turn == Splendor.HUMAN || game.isFinished) break
+                delay(CPU_TURN_MILLIS)
+                finishSplendorTurn(withContext(Dispatchers.Default) { game.cpuTurn() })
+            }
+        }
+    }
+
+    private fun finishSplendorTurn(next: SplendorGame) {
+        val wasFinished = mutableSplendor.value?.isFinished == true
+        mutableSplendor.value = next.copy(seconds = splendorSeconds)
+        if (!wasFinished && next.winner == Splendor.HUMAN) {
+            val record = SplendorRecord(System.currentTimeMillis(), next.cpus, splendorSeconds, next.me.points)
+            mutableSplendorRecords.value = listOf(record) + mutableSplendorRecords.value
+            SplendorRecords.save(getApplication(), mutableSplendorRecords.value)
+        }
+        saveSplendor()
     }
 
     companion object {

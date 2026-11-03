@@ -1,5 +1,6 @@
 package com.kyeongrok.youtubemp3
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,7 +46,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -279,19 +285,26 @@ private fun Holdings(player: SplendorPlayer, size: Dp) {
                 } else {
                     Spacer(Modifier.size(size))
                 }
-                Chip(color, player.tokens[color], size, CircleShape)
+                Chip(color, player.tokens[color], size, CircleShape, coin = true)
             }
         }
     }
 }
 
 @Composable
-private fun Chip(color: Int, count: Int, size: Dp, shape: androidx.compose.ui.graphics.Shape) {
+private fun Chip(color: Int, count: Int, size: Dp, shape: Shape, coin: Boolean = false) {
+    val alpha = if (count == 0) 0.25f else 1f
     Box(
         Modifier
             .size(size)
-            .background(GemFills[color].copy(alpha = if (count == 0) 0.25f else 1f), shape)
-            .border(1.dp, CardLine, shape),
+            .then(
+                if (coin) {
+                    Modifier.drawBehind { with(SplendorArt) { coin(color, alpha) } }
+                } else {
+                    Modifier.background(GemFills[color].copy(alpha = alpha), shape)
+                },
+            )
+            .border(1.dp, CardLine.copy(alpha = alpha), shape),
         contentAlignment = Alignment.Center,
     ) {
         if (count > 0) {
@@ -317,7 +330,13 @@ private fun Chip(color: Int, count: Int, size: Dp, shape: androidx.compose.ui.gr
 private fun NobleView(id: Int, size: Dp) {
     val noble = Splendor.noble(id)
     Box(
-        Modifier.size(size).background(NobleFace, CardShape).border(1.dp, CardLine, CardShape).padding(3.dp),
+        Modifier
+            .size(size)
+            .clip(CardShape)
+            .background(NobleFace)
+            .drawBehind { with(SplendorArt) { crown() } }
+            .border(1.dp, CardLine, CardShape)
+            .padding(3.dp),
     ) {
         Text(
             Splendor.NOBLE_POINTS.toString(),
@@ -339,7 +358,9 @@ private fun DeckView(tier: Int, count: Int, width: Dp, onClick: () -> Unit) {
     Box(
         Modifier
             .size(width, width * CARD_RATIO)
-            .background(DeckBacks[tier].copy(alpha = if (count == 0) 0.3f else 1f), CardShape)
+            .clip(CardShape)
+            .alpha(if (count == 0) 0.3f else 1f)
+            .drawBehind { with(SplendorArt) { deckBack(DeckBacks[tier]) } }
             .border(1.dp, CardLine, CardShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -357,7 +378,8 @@ private fun CardView(card: SplendorCard, width: Dp, highlighted: Boolean = false
     Box(
         Modifier
             .size(width, width * CARD_RATIO)
-            .background(CardTints[card.bonus], CardShape)
+            .clip(CardShape)
+            .drawBehind { with(SplendorArt) { cardBackground(CardTints[card.bonus], card.tier) } }
             .border(
                 if (highlighted) 2.dp else 1.dp,
                 if (highlighted) MaterialTheme.colorScheme.primary else CardLine,
@@ -375,16 +397,12 @@ private fun CardView(card: SplendorCard, width: Dp, highlighted: Boolean = false
                 modifier = Modifier.align(Alignment.TopStart),
             )
         }
-        Box(
-            Modifier
-                .align(Alignment.TopEnd)
-                .size(width * 0.26f)
-                .background(GemFills[card.bonus], CircleShape)
-                .border(1.dp, CardLine, CircleShape),
-        )
+        Canvas(Modifier.align(Alignment.TopEnd).size(width * 0.32f, width * 0.27f)) {
+            with(SplendorArt) { gem(card.bonus, Offset.Zero, size) }
+        }
         Column(Modifier.align(Alignment.BottomStart), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             card.cost.forEachIndexed { color, count ->
-                if (count > 0) Chip(color, count, width * 0.22f, CircleShape)
+                if (count > 0) Chip(color, count, width * 0.22f, CircleShape, coin = true)
             }
         }
     }
@@ -405,7 +423,7 @@ private fun Bank(game: SplendorGame, viewModel: MainViewModel) {
                 Box(
                     Modifier
                         .size(40.dp)
-                        .background(GemFills[color].copy(alpha = if (game.bank[color] == 0) 0.25f else 1f), CircleShape)
+                        .drawBehind { with(SplendorArt) { coin(color, if (game.bank[color] == 0) 0.25f else 1f) } }
                         .border(if (picked > 0) 3.dp else 1.dp, if (picked > 0) colors.primary else CardLine, CircleShape)
                         .clickable(enabled = game.isHumanTurn) { viewModel.tapSplendorGem(color) },
                     contentAlignment = Alignment.Center,

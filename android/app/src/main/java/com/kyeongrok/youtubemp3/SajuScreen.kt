@@ -1,5 +1,8 @@
 package com.kyeongrok.youtubemp3
 
+import java.time.YearMonth
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.clickable
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -125,8 +128,10 @@ fun SajuScreen(viewModel: MainViewModel) {
     val profiles by viewModel.sajuProfiles.collectAsStateWithLifecycle()
     var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var matching by rememberSaveable { mutableStateOf(false) }
     val selected = profiles.firstOrNull { it.id == selectedId } ?: profiles.firstOrNull()
     val editing = editingId ?: if (profiles.isEmpty()) NEW_PROFILE else null
+    val showMatch = matching && editing == null && profiles.size >= 2
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -136,15 +141,24 @@ fun SajuScreen(viewModel: MainViewModel) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 profiles.forEach { profile ->
                     FilterChip(
-                        selected = editing == null && profile.id == selected?.id,
+                        selected = editing == null && !showMatch && profile.id == selected?.id,
                         onClick = {
                             selectedId = profile.id
                             editingId = null
+                            matching = false
                         },
                         label = { Text(profile.name) },
                     )
                 }
                 FilterChip(editing == NEW_PROFILE, { editingId = NEW_PROFILE }, { Text("+ 추가") })
+                FilterChip(
+                    selected = showMatch,
+                    onClick = {
+                        matching = true
+                        editingId = null
+                    },
+                    label = { Text("♥ 궁합") },
+                )
             }
         }
 
@@ -159,6 +173,12 @@ fun SajuScreen(viewModel: MainViewModel) {
                     editingId = null
                 },
             )
+        } else if (matching) {
+            if (profiles.size < 2) {
+                Text("궁합을 보려면 두 사람 이상 추가해 주세요. 위의 「+ 추가」를 누르세요.")
+            } else {
+                SajuMatchView(profiles)
+            }
         } else if (selected != null) {
             SajuResult(
                 Saju.chart(selected),
@@ -354,6 +374,14 @@ private fun SajuResult(chart: SajuChart, onEdit: () -> Unit, onDelete: () -> Uni
             Text(SajuText.FORTUNES[yearGod])
         }
 
+        Section("월별 운세 · ${today.year}년") {
+            MonthlyFortunes(chart, today)
+        }
+
+        Section("만세력 · 좋은 날 고르기") {
+            SajuCalendar(chart, today)
+        }
+
         val todayPillar = Saju.dayPillar(today)
         val todayGod = Saju.tenGod(chart.dayStem, todayPillar.stem)
         Section("오늘의 운세 · ${today.monthValue}월 ${today.dayOfMonth}일 ${todayPillar.hangul}(${todayPillar.hanja})일 · ${Saju.TEN_GODS[todayGod]}") {
@@ -378,6 +406,263 @@ private fun SajuResult(chart: SajuChart, onEdit: () -> Unit, onDelete: () -> Uni
         }
         Text(
             "전통 명리학의 기본 규칙으로 계산한 풀이입니다. 재미로 보세요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SajuMatchView(profiles: List<SajuProfile>) {
+    var firstId by rememberSaveable { mutableStateOf(profiles[0].id) }
+    var secondId by rememberSaveable { mutableStateOf(profiles[1].id) }
+    val first = profiles.firstOrNull { it.id == firstId } ?: profiles[0]
+    val second = profiles.firstOrNull { it.id == secondId && it.id != first.id }
+        ?: profiles.first { it.id != first.id }
+    val colors = MaterialTheme.colorScheme
+
+    @Composable
+    fun Picker(label: String, chosen: SajuProfile, other: SajuProfile, onPick: (Long) -> Unit) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                profiles.filter { it.id != other.id }.forEach { profile ->
+                    FilterChip(profile.id == chosen.id, { onPick(profile.id) }, { Text(profile.name) })
+                }
+            }
+        }
+    }
+
+    val a = Saju.chart(first)
+    val b = Saju.chart(second)
+    val result = SajuMatch.compute(a, b)
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Picker("첫 번째 사람", first, second) { firstId = it }
+        Picker("두 번째 사람", second, first) { secondId = it }
+
+        Column(
+            Modifier.fillMaxWidth().background(colors.primaryContainer, BoxShape).padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("${first.name} ♥ ${second.name}", style = MaterialTheme.typography.titleMedium, color = colors.onPrimaryContainer)
+            Text("${result.score}점", fontSize = 44.sp, fontWeight = FontWeight.Bold, color = colors.primary)
+            Text(result.grade, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = colors.onPrimaryContainer)
+            Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(10.dp).background(colors.surface, BoxShape)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(result.score / 100f).background(colors.primary, BoxShape))
+            }
+            Text(result.summary, Modifier.padding(top = 4.dp), color = colors.onPrimaryContainer)
+        }
+
+        Section("두 사람의 일주") {
+            listOf(first to a, second to b).forEach { (profile, chart) ->
+                Text(
+                    "${profile.name} · ${chart.day.hangul}(${chart.day.hanja})일주 · ${Saju.ANIMALS[chart.year.branch]}띠",
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(SajuText.DAY_STEMS[chart.dayStem].substringBefore('\n'), color = colors.onSurfaceVariant)
+            }
+        }
+
+        result.items.forEach { item ->
+            val sign = when {
+                item.points > 0 -> "+${item.points}"
+                item.points < 0 -> "${item.points}"
+                else -> "0"
+            }
+            Section("${item.title}  ($sign)") {
+                Text(item.text)
+            }
+        }
+
+        Section("오행 비교") {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(first.name, fontWeight = FontWeight.Bold)
+                    ElementBars(a.elements)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(second.name, fontWeight = FontWeight.Bold)
+                    ElementBars(b.elements)
+                }
+            }
+        }
+
+        Text(
+            "일간·일지·띠·오행으로 본 전통 궁합의 간단한 풀이입니다. 재미로 보세요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+    }
+}
+
+/** 그해 12달의 운세다. 처음에는 이번 달부터 석 달만 보여 준다. */
+@Composable
+private fun MonthlyFortunes(chart: SajuChart, today: LocalDate) {
+    var all by rememberSaveable(chart.profile.id) { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
+    val months = SajuDays.months(chart, today.year)
+    val shown = if (all) months else months.drop(today.monthValue - 1).take(3)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        shown.forEach { fortune ->
+            val current = fortune.month == today.monthValue
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .border(if (current) 2.dp else 1.dp, if (current) colors.primary else colors.outlineVariant, BoxShape)
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    "${fortune.month}월 · ${fortune.pillar.hangul}(${fortune.pillar.hanja})월 · ${Saju.TEN_GODS[fortune.god]}" +
+                        if (current) " · 이번 달" else "",
+                    fontWeight = FontWeight.Bold,
+                    color = if (current) colors.primary else Color.Unspecified,
+                )
+                Text(fortune.text)
+                fortune.note?.let { Text(it, color = colors.onSurfaceVariant) }
+            }
+        }
+        TextButton(onClick = { all = !all }) { Text(if (all) "이번 달부터 석 달만 보기" else "12달 모두 보기") }
+        Text(
+            "달은 절기로 나눕니다. 각 달 15일이 속한 절기 달로 보았습니다.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+    }
+}
+
+private val GoodDay = Color(0xFF66BB6A)
+private val BadDay = Color(0xFFEF5350)
+private val WEEKDAYS = listOf("일", "월", "화", "수", "목", "금", "토")
+
+/** 한 달 달력에 날마다 일진을 적고, 그 사람에게 좋은 날과 조심할 날을 색으로 칠한다. */
+@Composable
+private fun SajuCalendar(chart: SajuChart, today: LocalDate) {
+    val colors = MaterialTheme.colorScheme
+    var monthIndex by rememberSaveable { mutableStateOf(today.year * 12 + today.monthValue - 1) }
+    var selectedDay by rememberSaveable(monthIndex) {
+        mutableStateOf(if (monthIndex == today.year * 12 + today.monthValue - 1) today.dayOfMonth else 1)
+    }
+    val month = YearMonth.of(monthIndex / 12, monthIndex % 12 + 1)
+    val ratings = (1..month.lengthOfMonth()).map { SajuDays.rate(chart, month.atDay(it)) }
+    val blanks = month.atDay(1).dayOfWeek.value % 7
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { monthIndex-- }) { Text("◀") }
+            Text(
+                "${month.year}년 ${month.monthValue}월 · ${Saju.monthPillar(month.atDay(15)).hanja}월",
+                Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+            )
+            TextButton(onClick = { monthIndex++ }) { Text("▶") }
+        }
+        Row(Modifier.fillMaxWidth()) {
+            WEEKDAYS.forEachIndexed { index, day ->
+                Text(
+                    day,
+                    Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = when (index) {
+                        0 -> BadDay
+                        6 -> colors.primary
+                        else -> colors.onSurfaceVariant
+                    },
+                )
+            }
+        }
+        val cells = List(blanks) { null } + ratings
+        cells.chunked(7).forEach { week ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                for (column in 0 until 7) {
+                    val rating = week.getOrNull(column)
+                    if (rating == null) {
+                        Box(Modifier.weight(1f))
+                        continue
+                    }
+                    val day = rating.date.dayOfMonth
+                    val selected = day == selectedDay
+                    val isToday = rating.date == today
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .height(52.dp)
+                            .background(
+                                when (rating.mood) {
+                                    DayMood.Good -> GoodDay.copy(alpha = 0.3f)
+                                    DayMood.Bad -> BadDay.copy(alpha = 0.25f)
+                                    DayMood.Normal -> Color.Transparent
+                                },
+                                BoxShape,
+                            )
+                            .border(
+                                when {
+                                    selected -> 2.dp
+                                    isToday -> 1.dp
+                                    else -> 0.dp
+                                },
+                                if (selected || isToday) colors.primary else Color.Transparent,
+                                BoxShape,
+                            )
+                            .clickable { selectedDay = day },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            "$day",
+                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                            color = when (column) {
+                                0 -> BadDay
+                                6 -> colors.primary
+                                else -> Color.Unspecified
+                            },
+                        )
+                        Text(rating.pillar.hanja, fontSize = 11.sp, color = colors.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(12.dp).background(GoodDay.copy(alpha = 0.5f), BoxShape))
+            Text("좋은 날", style = MaterialTheme.typography.bodySmall)
+            Box(Modifier.size(12.dp).background(BadDay.copy(alpha = 0.45f), BoxShape))
+            Text("조심할 날", style = MaterialTheme.typography.bodySmall)
+        }
+
+        ratings.getOrNull(selectedDay - 1)?.let { rating ->
+            Column(
+                Modifier.fillMaxWidth().background(colors.surfaceVariant, BoxShape).padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                val mood = when (rating.mood) {
+                    DayMood.Good -> "좋은 날"
+                    DayMood.Bad -> "조심할 날"
+                    DayMood.Normal -> "무난한 날"
+                }
+                Text(
+                    "${month.monthValue}월 ${rating.date.dayOfMonth}일(${WEEKDAYS[rating.date.dayOfWeek.value % 7]}) · " +
+                        "${rating.pillar.hangul}(${rating.pillar.hanja})일 · $mood",
+                    fontWeight = FontWeight.Bold,
+                )
+                rating.reasons.forEach { Text("· $it") }
+            }
+        }
+
+        fun line(rating: DayRating) =
+            "${rating.date.dayOfMonth}일(${WEEKDAYS[rating.date.dayOfWeek.value % 7]}) ${rating.pillar.hanja}"
+        val good = ratings.filter { it.mood == DayMood.Good }.sortedByDescending { it.score }
+        val bad = ratings.filter { it.mood == DayMood.Bad }.sortedBy { it.score }
+        Text("이달의 좋은 날", fontWeight = FontWeight.Bold, color = GoodDay)
+        Text(if (good.isEmpty()) "이달에는 특히 좋은 날이 없습니다. 무난한 날을 고르세요." else good.joinToString(", ", transform = ::line))
+        Text("이달에 조심할 날", fontWeight = FontWeight.Bold, color = BadDay)
+        Text(if (bad.isEmpty()) "이달에는 특히 조심할 날이 없습니다." else bad.joinToString(", ", transform = ::line))
+        Text(
+            "약속·계약·이사처럼 중요한 일은 좋은 날로, 조심할 날은 피해서 잡아 보세요. 날짜를 누르면 까닭이 나옵니다.",
             style = MaterialTheme.typography.bodySmall,
             color = colors.onSurfaceVariant,
         )

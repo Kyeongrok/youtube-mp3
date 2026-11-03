@@ -39,6 +39,8 @@ data class SajuProfile(
     val minutes: Int?,
 )
 
+enum class BranchRelation { Same, Hap, Samhap, Chung, Wonjin }
+
 data class DaeUn(val age: Int, val pillar: Pillar)
 
 data class SajuChart(
@@ -207,6 +209,27 @@ object Saju {
         val year = if (date.monthValue <= 2 && order >= 10) date.year - 1 else date.year
         return Pillar(Math.floorMod(year - 4, 60))
     }
+
+    /** 그날이 속한 달(절기 기준)의 간지다. */
+    fun monthPillar(date: LocalDate): Pillar {
+        val instant = date.atTime(NOON / 60, 0).atZone(KOREA).toInstant()
+        val order = monthOrder(sunLongitude(julianDay(instant)))
+        val year = yearPillar(date)
+        return Pillar.of((year.stem % 5 * 2 + 2 + order) % 10, (order + 2) % 12)
+    }
+
+    /** 두 지지의 관계다. 같음, 육합, 충, 원진, 삼합 가운데 하나이거나 null이다. */
+    fun branchRelation(x: Int, y: Int): BranchRelation? = when {
+        x == y -> BranchRelation.Same
+        (x + y) % 12 == 1 -> BranchRelation.Hap
+        (x - y + 12) % 12 == 6 -> BranchRelation.Chung
+        (minOf(x, y) to maxOf(x, y)) in WONJIN -> BranchRelation.Wonjin
+        x % 4 == y % 4 -> BranchRelation.Samhap
+        else -> null
+    }
+
+    /** 원진 관계인 지지 쌍이다. 子未, 丑午, 寅酉, 卯申, 辰亥, 巳戌. */
+    private val WONJIN = setOf(0 to 7, 1 to 6, 2 to 9, 3 to 8, 4 to 11, 5 to 10)
 
     /** 입춘(태양 황경 315도)부터 30도마다 달이 바뀐다. 0이 인월이고 11이 축월이다. */
     private fun monthOrder(longitude: Double) = floor(((longitude - 315 + 360) % 360) / 30).toInt()

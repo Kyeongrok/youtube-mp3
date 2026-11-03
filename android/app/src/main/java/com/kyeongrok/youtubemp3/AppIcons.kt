@@ -105,6 +105,16 @@ object AppIcons {
         }
     }
 
+    /** 네모난 획으로 쓴 「가」. */
+    val Hangul: ImageVector = materialIcon("App.Hangul") {
+        materialPath {
+            moveTo(2.5f, 5f); horizontalLineTo(12f); verticalLineTo(19f); horizontalLineTo(9.5f)
+            verticalLineTo(7.5f); horizontalLineTo(2.5f); close()
+            moveTo(15f, 3f); horizontalLineToRelative(2.5f); verticalLineToRelative(18f); horizontalLineTo(15f); close()
+            moveTo(17.5f, 10.8f); horizontalLineTo(21.5f); verticalLineToRelative(2.4f); horizontalLineTo(17.5f); close()
+        }
+    }
+
     /** 나란히 놓인 타일 세 장. */
     val Rummikub: ImageVector = materialIcon("App.Rummikub") {
         materialPath {

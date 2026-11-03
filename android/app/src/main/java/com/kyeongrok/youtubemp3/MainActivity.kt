@@ -91,7 +91,7 @@ import kotlinx.coroutines.delay
 // 목록 끝 항목이 화면 아래에 붙지 않도록 조금 띄운다.
 internal val ListPadding = PaddingValues(bottom = 16.dp)
 
-private enum class MiniGame { None, Sudoku, Shanghai, FreeCell, Rummikub, Splendor }
+private enum class MiniGame { None, Sudoku, Shanghai, FreeCell, Rummikub, Splendor, Saju }
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -226,6 +226,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                 MiniGame.FreeCell -> FreeCellTopBar(viewModel, onBack = { game = MiniGame.None })
                 MiniGame.Rummikub -> RummikubTopBar(viewModel, onBack = { game = MiniGame.None })
                 MiniGame.Splendor -> SplendorTopBar(viewModel, onBack = { game = MiniGame.None })
+                MiniGame.Saju -> SajuTopBar(onBack = { game = MiniGame.None })
                 MiniGame.None -> TopAppBar(
                     navigationIcon = { MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true }) },
                     title = {
@@ -251,6 +252,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                     MiniGame.Shanghai -> ShanghaiScreen(viewModel)
                     MiniGame.Rummikub -> RummikubScreen(viewModel)
                     MiniGame.Splendor -> SplendorScreen(viewModel)
+                    MiniGame.Saju -> SajuScreen(viewModel)
                     else -> FreeCellScreen(viewModel)
                 }
             }
@@ -298,6 +300,7 @@ private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
                 Triple("프리셀", AppIcons.FreeCell, MiniGame.FreeCell),
                 Triple("루미큐브", AppIcons.Rummikub, MiniGame.Rummikub),
                 Triple("스플렌더", AppIcons.Splendor, MiniGame.Splendor),
+                Triple("사주", AppIcons.Saju, MiniGame.Saju),
             ).forEach { (label, icon, target) ->
                 DropdownMenuItem(
                     text = { Text(label) },

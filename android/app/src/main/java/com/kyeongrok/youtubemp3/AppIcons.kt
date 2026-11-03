@@ -80,6 +80,31 @@ object AppIcons {
         }
     }
 
+    /** 태극 모양. 바깥 테 안에 어두운 반쪽과 점 하나를 그린다. */
+    val Saju: ImageVector = materialIcon("App.Saju") {
+        materialPath(pathFillType = PathFillType.EvenOdd) {
+            moveTo(12f, 1.5f)
+            arcToRelative(10.5f, 10.5f, 0f, true, true, 0f, 21f)
+            arcToRelative(10.5f, 10.5f, 0f, true, true, 0f, -21f)
+            close()
+            moveTo(12f, 3f)
+            arcToRelative(9f, 9f, 0f, true, true, 0f, 18f)
+            arcToRelative(9f, 9f, 0f, true, true, 0f, -18f)
+            close()
+        }
+        materialPath {
+            moveTo(12f, 3f)
+            arcTo(9f, 9f, 0f, false, true, 12f, 21f)
+            arcTo(4.5f, 4.5f, 0f, false, true, 12f, 12f)
+            arcTo(4.5f, 4.5f, 0f, false, false, 12f, 3f)
+            close()
+            moveTo(12f, 6.3f)
+            arcToRelative(1.2f, 1.2f, 0f, true, true, 0f, 2.4f)
+            arcToRelative(1.2f, 1.2f, 0f, true, true, 0f, -2.4f)
+            close()
+        }
+    }
+
     /** 나란히 놓인 타일 세 장. */
     val Rummikub: ImageVector = materialIcon("App.Rummikub") {
         materialPath {

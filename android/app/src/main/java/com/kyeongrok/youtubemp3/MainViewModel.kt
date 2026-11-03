@@ -89,6 +89,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var splendorSeconds = mutableSplendor.value?.seconds ?: 0
     private var splendorCpu: Job? = null
 
+    private val mutableSajuProfiles = MutableStateFlow(SajuProfiles.load(application))
+    val sajuProfiles = mutableSajuProfiles.asStateFlow()
+
     private val mutableDeviceTracks = MutableStateFlow<List<Track>>(emptyList())
     val deviceTracks = mutableDeviceTracks.asStateFlow()
 
@@ -476,6 +479,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             RummikubRecords.save(getApplication(), mutableRummikubRecords.value)
         }
         saveRummikub()
+    }
+
+    /** 같은 사람이 있으면 고치고, 없으면 끝에 더한다. */
+    fun saveSajuProfile(profile: SajuProfile) {
+        val profiles = mutableSajuProfiles.value
+        mutableSajuProfiles.value = if (profiles.any { it.id == profile.id }) {
+            profiles.map { if (it.id == profile.id) profile else it }
+        } else {
+            profiles + profile
+        }
+        SajuProfiles.save(getApplication(), mutableSajuProfiles.value)
+    }
+
+    fun deleteSajuProfile(id: Long) {
+        mutableSajuProfiles.value = mutableSajuProfiles.value.filter { it.id != id }
+        SajuProfiles.save(getApplication(), mutableSajuProfiles.value)
     }
 
     fun newSplendor(cpus: Int) {

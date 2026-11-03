@@ -34,6 +34,18 @@ object AppIcons {
         }
     }
 
+    /** 8분음표. 동그란 머리와 기둥, 위쪽 깃발. */
+    val Music: ImageVector = materialIcon("App.Music") {
+        materialPath {
+            moveTo(12f, 3f); verticalLineToRelative(10.55f)
+            curveToRelative(-0.59f, -0.34f, -1.27f, -0.55f, -2f, -0.55f)
+            curveToRelative(-2.21f, 0f, -4f, 1.79f, -4f, 4f)
+            reflectiveCurveToRelative(1.79f, 4f, 4f, 4f)
+            reflectiveCurveToRelative(4f, -1.79f, 4f, -4f)
+            verticalLineTo(7f); horizontalLineToRelative(4f); verticalLineTo(3f); horizontalLineToRelative(-6f); close()
+        }
+    }
+
     /** 3×3 칸. */
     val Sudoku: ImageVector = materialIcon("App.Sudoku") {
         materialPath {

@@ -90,7 +90,7 @@ private const val ARROW_GAP = 0.09f
 @Composable
 fun HangulTopBar(onBack: () -> Unit) {
     TopAppBar(
-        title = { Text("한글 따라 쓰기") },
+        title = { Text("한글 배우기") },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")

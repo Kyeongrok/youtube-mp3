@@ -1,5 +1,11 @@
 package com.kyeongrok.youtubemp3
 
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.ui.graphics.vector.ImageVector
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -91,7 +97,22 @@ import kotlinx.coroutines.delay
 // 목록 끝 항목이 화면 아래에 붙지 않도록 조금 띄운다.
 internal val ListPadding = PaddingValues(bottom = 16.dp)
 
-private enum class MiniGame { None, Sudoku, Shanghai, FreeCell, Rummikub, Splendor, Saju, Hangul }
+/** 앱 안의 화면들이다. None은 음악(YoutubeMp3) 화면이고 Home은 앱을 고르는 첫 화면이다. */
+private enum class MiniGame { Home, None, Sudoku, Shanghai, FreeCell, Rummikub, Splendor, Saju, Hangul }
+
+private class AppEntry(val label: String, val icon: ImageVector, val target: MiniGame)
+
+private val GAME_ENTRIES = listOf(
+    AppEntry("스도쿠", AppIcons.Sudoku, MiniGame.Sudoku),
+    AppEntry("상하이", AppIcons.Shanghai, MiniGame.Shanghai),
+    AppEntry("프리셀", AppIcons.FreeCell, MiniGame.FreeCell),
+    AppEntry("루미큐브", AppIcons.Rummikub, MiniGame.Rummikub),
+    AppEntry("스플렌더", AppIcons.Splendor, MiniGame.Splendor),
+    AppEntry("사주", AppIcons.Saju, MiniGame.Saju),
+    AppEntry("한글 배우기", AppIcons.Hangul, MiniGame.Hangul),
+)
+
+private val APP_ENTRIES = listOf(AppEntry("음악", AppIcons.Music, MiniGame.None)) + GAME_ENTRIES
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -196,10 +217,18 @@ private fun MainScreen(viewModel: MainViewModel) {
     val update by viewModel.update.collectAsStateWithLifecycle()
     val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
     var updateAsked by rememberSaveable { mutableStateOf(false) }
-    var game by rememberSaveable { mutableStateOf(MiniGame.None) }
+    val context = LocalContext.current
+    // 처음 켜면 마지막으로 쓰던 화면을, 기록이 없으면 앱 고르는 화면을 연다.
+    var game by rememberSaveable {
+        val last = AppSettings.loadLastScreen(context)
+        mutableStateOf(MiniGame.entries.find { it.name == last && it != MiniGame.Home } ?: MiniGame.Home)
+    }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
 
-    BackHandler(game != MiniGame.None) { game = MiniGame.None }
+    LaunchedEffect(game) {
+        if (game != MiniGame.Home) AppSettings.saveLastScreen(context, game.name)
+    }
+    BackHandler(game != MiniGame.Home) { game = MiniGame.Home }
 
     if (settingsOpen) SettingsDialog(viewModel, onDismiss = { settingsOpen = false })
 
@@ -221,31 +250,39 @@ private fun MainScreen(viewModel: MainViewModel) {
     Scaffold(
         topBar = {
             when (game) {
-                MiniGame.Sudoku -> SudokuTopBar(viewModel, onBack = { game = MiniGame.None })
-                MiniGame.Shanghai -> ShanghaiTopBar(viewModel, onBack = { game = MiniGame.None })
-                MiniGame.FreeCell -> FreeCellTopBar(viewModel, onBack = { game = MiniGame.None })
-                MiniGame.Rummikub -> RummikubTopBar(viewModel, onBack = { game = MiniGame.None })
-                MiniGame.Splendor -> SplendorTopBar(viewModel, onBack = { game = MiniGame.None })
-                MiniGame.Saju -> SajuTopBar(onBack = { game = MiniGame.None })
-                MiniGame.Hangul -> HangulTopBar(onBack = { game = MiniGame.None })
-                MiniGame.None -> TopAppBar(
-                    navigationIcon = { MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true }) },
-                    title = {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text("YoutubeMp3")
-                            Text(
-                                "v${BuildConfig.VERSION_NAME}",
-                                Modifier.padding(start = 8.dp, bottom = 2.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
+                MiniGame.Sudoku -> SudokuTopBar(viewModel, onBack = { game = MiniGame.Home })
+                MiniGame.Shanghai -> ShanghaiTopBar(viewModel, onBack = { game = MiniGame.Home })
+                MiniGame.FreeCell -> FreeCellTopBar(viewModel, onBack = { game = MiniGame.Home })
+                MiniGame.Rummikub -> RummikubTopBar(viewModel, onBack = { game = MiniGame.Home })
+                MiniGame.Splendor -> SplendorTopBar(viewModel, onBack = { game = MiniGame.Home })
+                MiniGame.Saju -> SajuTopBar(onBack = { game = MiniGame.Home })
+                MiniGame.Hangul -> HangulTopBar(onBack = { game = MiniGame.Home })
+                MiniGame.Home -> TopAppBar(
+                    title = { AppTitle() },
+                    actions = {
+                        IconButton(onClick = { settingsOpen = true }) {
+                            Icon(Icons.Filled.Settings, contentDescription = "설정")
                         }
                     },
+                )
+                MiniGame.None -> TopAppBar(
+                    navigationIcon = { MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true }) },
+                    title = { AppTitle() },
                 )
             }
         },
         bottomBar = { PlayerBar() },
     ) { padding ->
+        if (game == MiniGame.Home) {
+            HomeScreen(
+                modifier = Modifier.padding(padding),
+                update = update?.version,
+                updateProgress = updateProgress,
+                onInstall = viewModel::installUpdate,
+                onOpen = { game = it },
+            )
+            return@Scaffold
+        }
         if (game != MiniGame.None) {
             Column(Modifier.padding(padding).fillMaxSize()) {
                 when (game) {
@@ -296,21 +333,22 @@ private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
             Icon(Icons.Filled.Menu, contentDescription = "메뉴")
         }
         DropdownMenu(expanded, { expanded = false }) {
-            listOf(
-                Triple("스도쿠", AppIcons.Sudoku, MiniGame.Sudoku),
-                Triple("상하이", AppIcons.Shanghai, MiniGame.Shanghai),
-                Triple("프리셀", AppIcons.FreeCell, MiniGame.FreeCell),
-                Triple("루미큐브", AppIcons.Rummikub, MiniGame.Rummikub),
-                Triple("스플렌더", AppIcons.Splendor, MiniGame.Splendor),
-                Triple("사주", AppIcons.Saju, MiniGame.Saju),
-                Triple("한글", AppIcons.Hangul, MiniGame.Hangul),
-            ).forEach { (label, icon, target) ->
+            DropdownMenuItem(
+                text = { Text("처음 화면") },
+                leadingIcon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onGame(MiniGame.Home)
+                },
+            )
+            HorizontalDivider()
+            GAME_ENTRIES.forEach { entry ->
                 DropdownMenuItem(
-                    text = { Text(label) },
-                    leadingIcon = { Icon(icon, contentDescription = null) },
+                    text = { Text(entry.label) },
+                    leadingIcon = { Icon(entry.icon, contentDescription = null) },
                     onClick = {
                         expanded = false
-                        onGame(target)
+                        onGame(entry.target)
                     },
                 )
             }
@@ -577,6 +615,65 @@ private fun PlayerBar() {
                 },
                 valueRange = 0f..state.durationMs.coerceAtLeast(1).toFloat(),
             )
+        }
+    }
+}
+
+@Composable
+private fun AppTitle() {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text("YoutubeMp3")
+        Text(
+            "v${BuildConfig.VERSION_NAME}",
+            Modifier.padding(start = 8.dp, bottom = 2.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+}
+
+/** 앱을 고르는 첫 화면이다. 음악과 게임들을 바둑판처럼 늘어놓는다. */
+@Composable
+private fun HomeScreen(
+    modifier: Modifier,
+    update: String?,
+    updateProgress: Float?,
+    onInstall: () -> Unit,
+    onOpen: (MiniGame) -> Unit,
+) {
+    Column(modifier.fillMaxSize()) {
+        update?.let { version ->
+            if (updateProgress == null) {
+                TextButton(onClick = onInstall, modifier = Modifier.fillMaxWidth()) {
+                    Text("새 버전 $version 설치")
+                }
+            } else {
+                LinearProgressIndicator(progress = { updateProgress }, modifier = Modifier.fillMaxWidth())
+            }
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(104.dp),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(APP_ENTRIES) { entry ->
+                ElevatedCard(onClick = { onOpen(entry.target) }) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            entry.icon,
+                            contentDescription = null,
+                            Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(entry.label, style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
         }
     }
 }

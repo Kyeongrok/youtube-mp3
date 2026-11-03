@@ -49,6 +49,7 @@ object AppSettings {
     private const val KEY_RUMMIKUB_TUTORIAL = "rummikubTutorialSeen"
     private const val KEY_RUMMIKUB_TABLE_SIZE = "rummikubTableSize"
     private const val KEY_RUMMIKUB_BLINK = "rummikubBlinkDuration"
+    private const val KEY_LAST_SCREEN = "lastScreen"
 
     fun loadTheme(context: Context): ThemeMode {
         val name = preferences(context).getString(KEY_THEME, null)
@@ -90,6 +91,13 @@ object AppSettings {
 
     fun saveRummikubBlinkDuration(context: Context, duration: RummikubBlinkDuration) {
         preferences(context).edit().putString(KEY_RUMMIKUB_BLINK, duration.name).apply()
+    }
+
+    /** 마지막으로 연 앱 화면의 이름이다. 처음 켜면 null이다. */
+    fun loadLastScreen(context: Context): String? = preferences(context).getString(KEY_LAST_SCREEN, null)
+
+    fun saveLastScreen(context: Context, name: String) {
+        preferences(context).edit().putString(KEY_LAST_SCREEN, name).apply()
     }
 
     private fun preferences(context: Context) = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)

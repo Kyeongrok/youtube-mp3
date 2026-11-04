@@ -191,7 +191,7 @@ private fun SudokuBoard(game: SudokuGame, selected: Int?, focused: Int?, size: D
                             Text(
                                 digit.toString(),
                                 color = when {
-                                    index in game.conflicts -> colors.error
+                                    index in game.wrong -> colors.error
                                     game.isGiven(index) -> colors.onSurface
                                     else -> colors.primary
                                 },
@@ -252,13 +252,14 @@ private fun SudokuPad(
     viewModel: MainViewModel,
     modifier: Modifier,
 ) {
-    val editable = selected != null && !game.isGiven(selected) && !game.isComplete
+    val editable = selected != null && !game.isLocked(selected) && !game.isComplete
     val filled = selected != null && game.cells[selected] != 0
 
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth()) {
             for (digit in 1..9) {
-                val left = (9 - game.cells.count { it == digit }).coerceAtLeast(0)
+                // 틀린 칸은 세지 않아야 남은 개수가 0이 되어 정답을 못 넣는 일이 없다.
+                val left = 9 - game.cells.indices.count { game.cells[it] == digit && game.solution[it] == digit }
                 TextButton(
                     onClick = {
                         // 숫자를 넣을 칸이 없으면 판에서 그 숫자를 찾아 보여 준다.

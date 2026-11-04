@@ -16,14 +16,18 @@ data class SudokuGame(
     val mistakes: Int = 0,
     val seconds: Int = 0,
 ) {
-    val conflicts: Set<Int> = Sudoku.findConflicts(cells)
-    val isComplete = 0 !in cells && conflicts.isEmpty()
+    /** 풀이는 하나뿐이므로 정답과 다르면 곧 틀린 칸이다. */
+    val wrong: Set<Int> = cells.indices.filter { cells[it] != 0 && cells[it] != solution[it] }.toSet()
+    val isComplete = cells == solution
 
     fun isGiven(index: Int) = puzzle[index] != 0
 
+    /** 처음부터 있던 칸과 이미 맞힌 칸은 고칠 수 없다. */
+    fun isLocked(index: Int) = isGiven(index) || cells[index] == solution[index]
+
     /** 숫자를 넣으면 그 칸의 메모와 같은 줄·칸·박스에 적힌 같은 숫자 메모를 지운다. 0은 칸을 비운다. */
     fun enter(index: Int, digit: Int): SudokuGame {
-        if (isGiven(index) || isComplete) return this
+        if (isLocked(index) || isComplete) return this
         val wrong = digit != 0 && digit != cells[index] && digit != solution[index]
         return copy(
             mistakes = if (wrong) mistakes + 1 else mistakes,
@@ -60,11 +64,6 @@ object Sudoku {
     }
 
     fun arePeers(first: Int, second: Int) = second in PEERS[first]
-
-    fun findConflicts(cells: List<Int>): Set<Int> =
-        UNITS.flatMap { unit ->
-            unit.filter { cells[it] != 0 }.groupBy { cells[it] }.values.filter { it.size > 1 }.flatten()
-        }.toSet()
 
     /** 빈 판을 무작위로 채운 뒤, 풀이가 하나로 남는 칸만 골라 비운다. */
     fun generate(level: SudokuLevel): SudokuGame {

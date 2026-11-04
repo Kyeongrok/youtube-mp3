@@ -41,7 +41,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
@@ -543,7 +545,10 @@ private fun DownloadsTab(downloads: List<DownloadItem>) {
 @Composable
 private fun LibraryTab(viewModel: MainViewModel) {
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var menuFor by remember { mutableStateOf<Long?>(null) }
+    var adding by remember { mutableStateOf<Track?>(null) }
     LaunchedEffect(Unit) { viewModel.refreshTracks() }
 
     if (tracks.isEmpty()) {
@@ -562,12 +567,36 @@ private fun LibraryTab(viewModel: MainViewModel) {
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                IconButton(onClick = { viewModel.delete(track) }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "삭제")
+                Box {
+                    IconButton(onClick = { menuFor = track.id }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "더 보기")
+                    }
+                    DropdownMenu(menuFor == track.id, { menuFor = null }) {
+                        DropdownMenuItem(
+                            text = { Text("재생목록에 추가") },
+                            leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                            onClick = {
+                                menuFor = null
+                                adding = track
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("삭제") },
+                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                            onClick = {
+                                menuFor = null
+                                viewModel.delete(track)
+                            },
+                        )
+                    }
                 }
             }
             HorizontalDivider()
         }
+    }
+
+    adding?.let { track ->
+        AddToPlaylistDialog(track, playlists, viewModel, onDone = { adding = null })
     }
 }
 

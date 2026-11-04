@@ -225,16 +225,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updatePlaylistTracks(id) { it - trackId }
     }
 
-    fun swapPlaylistTracks(id: Long, first: Long, second: Long) {
-        updatePlaylistTracks(id) { ids ->
-            ids.map {
-                when (it) {
-                    first -> second
-                    second -> first
-                    else -> it
-                }
-            }
-        }
+    /**
+     * 끌어서 바꾼 순서를 저장한다. [ordered]에는 기기에 있는 곡만 들어 있으니,
+     * 지금 기기에서 못 찾은 곡은 뒤에 그대로 남겨 둔다.
+     */
+    fun reorderPlaylistTracks(id: Long, ordered: List<Long>) {
+        updatePlaylistTracks(id) { ids -> ordered.filter { it in ids } + ids.filter { it !in ordered } }
     }
 
     private fun updatePlaylistTracks(id: Long, change: (List<Long>) -> List<Long>) {

@@ -13,7 +13,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,9 +34,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -47,13 +50,19 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -233,7 +242,7 @@ private fun RecentTracks(deviceTracks: List<Track>, playlists: List<Playlist>, v
 
 /** 곡을 넣을 재생목록을 고른다. 목록이 없거나 새로 만들고 싶으면 이름을 받아 만든 뒤 넣는다. */
 @Composable
-private fun AddToPlaylistDialog(track: Track, playlists: List<Playlist>, viewModel: MainViewModel, onDone: () -> Unit) {
+fun AddToPlaylistDialog(track: Track, playlists: List<Playlist>, viewModel: MainViewModel, onDone: () -> Unit) {
     val context = LocalContext.current
     var creating by remember { mutableStateOf(false) }
     val add = { id: Long, name: String ->
@@ -321,6 +330,56 @@ private fun PlaylistDetail(
     val context = LocalContext.current
     val tracksById = deviceTracks.associateBy { it.id }
     val tracks = playlist.trackIds.mapNotNull(tracksById::get)
+    val deleteFromDevice = rememberTrackDeleter(viewModel)
+
+    // 끄는 동안에는 화면의 순서만 바꾸고, 손을 떼면 저장한다.
+    // 끄는 제스처가 붙잡은 상태가 바뀌지 않도록 같은 상태 객체를 계속 쓰고, 목록이 바뀌면 값만 맞춘다.
+    var order by remember { mutableStateOf(tracks) }
+    var draggedId by remember { mutableStateOf<Long?>(null) }
+    val latestTracks by rememberUpdatedState(tracks)
+    LaunchedEffect(tracks) { if (draggedId == null) order = tracks }
+    var dragOffset by remember { mutableStateOf(0f) }
+    var menuFor by remember { mutableStateOf<Long?>(null) }
+    val listState = rememberLazyListState()
+
+    fun dragBy(delta: Float) {
+        val id = draggedId ?: return
+        val info = listState.layoutInfo
+        val current = info.visibleItemsInfo.firstOrNull { it.key == id } ?: return
+        dragOffset += delta
+        // 목록 끝에 닿으면 그쪽으로 굴린다. 곡이 따라 움직이므로 그만큼 되돌려 손가락 밑에 둔다.
+        val top = current.offset + dragOffset
+        val bottom = top + current.size
+        val edge = current.size / 2f
+        val scroll = when {
+            delta < 0 && top < info.viewportStartOffset + edge -> delta
+            delta > 0 && bottom > info.viewportEndOffset - edge -> delta
+            else -> 0f
+        }
+        if (scroll != 0f) dragOffset += listState.dispatchRawDelta(scroll)
+        // 끄는 곡의 가운데가 다른 곡 위로 넘어가면 자리를 바꾼다.
+        val center = current.offset + dragOffset + current.size / 2f
+        val target = info.visibleItemsInfo.firstOrNull {
+            it.key != id && center >= it.offset && center < it.offset + it.size
+        } ?: return
+        val from = order.indexOfFirst { it.id == id }
+        val to = order.indexOfFirst { it.id == target.key }
+        if (from < 0 || to < 0) return
+        order = order.toMutableList().apply { add(to, removeAt(from)) }
+        dragOffset += current.offset - target.offset
+    }
+
+    fun endDrag() {
+        if (draggedId != null && order.map { it.id } != latestTracks.map { it.id }) {
+            viewModel.reorderPlaylistTracks(playlist.id, order.map { it.id })
+        }
+        draggedId = null
+        dragOffset = 0f
+    }
+
+    // 끄는 제스처는 곡마다 한 번 만들어져 계속 살아 있으므로, 늘 최신 함수를 부르게 한다.
+    val latestDragBy by rememberUpdatedState<(Float) -> Unit> { dragBy(it) }
+    val latestEndDrag by rememberUpdatedState<() -> Unit> { endDrag() }
 
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -339,26 +398,73 @@ private fun PlaylistDetail(
             Button(onClick = { Player.play(context, tracks, 0) }, enabled = tracks.isNotEmpty()) { Text("전체 재생") }
             TextButton(onClick = { picking = true }) { Text("곡 선택") }
         }
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
-            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-                Row(
-                    Modifier.fillMaxWidth().clickable { Player.play(context, tracks, index) }.padding(start = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = ListPadding) {
+            itemsIndexed(order, key = { _, track -> track.id }) { index, track ->
+                val dragging = track.id == draggedId
+                Column(
+                    if (dragging) {
+                        Modifier
+                            .zIndex(1f)
+                            .graphicsLayer { translationY = dragOffset }
+                            .shadow(6.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    } else {
+                        Modifier.animateItem()
+                    },
                 ) {
-                    Text(track.title, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    IconButton(
-                        onClick = { viewModel.swapPlaylistTracks(playlist.id, track.id, tracks[index - 1].id) },
-                        enabled = index > 0,
-                    ) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "위로") }
-                    IconButton(
-                        onClick = { viewModel.swapPlaylistTracks(playlist.id, track.id, tracks[index + 1].id) },
-                        enabled = index < tracks.lastIndex,
-                    ) { Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "아래로") }
-                    IconButton(onClick = { viewModel.removePlaylistTrack(playlist.id, track.id) }) {
-                        Icon(Icons.Filled.Close, contentDescription = "목록에서 빼기")
+                    Row(
+                        Modifier.fillMaxWidth().clickable { Player.play(context, order, index) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // 손잡이를 잡고 위아래로 끌면 순서가 바뀐다.
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = "끌어서 순서 바꾸기",
+                            modifier = Modifier
+                                .pointerInput(track.id) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            draggedId = track.id
+                                            dragOffset = 0f
+                                        },
+                                        onDragEnd = { latestEndDrag() },
+                                        onDragCancel = { latestEndDrag() },
+                                        onDrag = { change, amount ->
+                                            change.consume()
+                                            latestDragBy(amount.y)
+                                        },
+                                    )
+                                }
+                                .padding(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(track.title, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Box {
+                            IconButton(onClick = { menuFor = track.id }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "더 보기")
+                            }
+                            DropdownMenu(menuFor == track.id, { menuFor = null }) {
+                                DropdownMenuItem(
+                                    text = { Text("재생목록에서 삭제") },
+                                    leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                                    onClick = {
+                                        menuFor = null
+                                        viewModel.removePlaylistTrack(playlist.id, track.id)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("기기에서 삭제") },
+                                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                                    onClick = {
+                                        menuFor = null
+                                        deleteFromDevice(track)
+                                    },
+                                )
+                            }
+                        }
                     }
+                    HorizontalDivider()
                 }
-                HorizontalDivider()
             }
         }
     }
@@ -414,28 +520,8 @@ private fun TrackPickerDialog(
 ) {
     var filter by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf(initial) }
-    var deleting by remember { mutableStateOf<Track?>(null) }
-    var confirming by remember { mutableStateOf<Track?>(null) }
     val visible = deviceTracks.filter { it.title.contains(filter.trim(), ignoreCase = true) }
-    val context = LocalContext.current
-    val deleteRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        // Android 11부터는 시스템이 이미 지웠고, 그 전에는 허락만 받았으므로 다시 지운다.
-        if (result.resultCode == Activity.RESULT_OK) {
-            deleting?.let {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) viewModel.forgetTrack(it) else viewModel.delete(it)
-            }
-        }
-        deleting = null
-    }
-    val deleteTrack = { track: Track ->
-        val sender = Library.requestDelete(context, track)
-        if (sender == null) {
-            viewModel.forgetTrack(track)
-        } else {
-            deleting = track
-            deleteRequest.launch(IntentSenderRequest.Builder(sender).build())
-        }
-    }
+    val deleteTrack = rememberTrackDeleter(viewModel)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -463,10 +549,7 @@ private fun TrackPickerDialog(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            // Android 11부터는 시스템이 직접 삭제를 확인한다.
-                            IconButton(onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) deleteTrack(track) else confirming = track
-                            }) {
+                            IconButton(onClick = { deleteTrack(track) }) {
                                 Icon(Icons.Filled.Delete, contentDescription = "영구 삭제")
                             }
                         }
@@ -477,19 +560,50 @@ private fun TrackPickerDialog(
         confirmButton = { TextButton(onClick = { onConfirm(selected) }) { Text("확인") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
+}
+
+/**
+ * 곡 파일을 기기에서 지우는 함수를 돌려준다. Android 11부터는 시스템이 직접 확인 창을 띄우고,
+ * 그 전에는 우리가 먼저 묻는다.
+ */
+@Composable
+fun rememberTrackDeleter(viewModel: MainViewModel): (Track) -> Unit {
+    val context = LocalContext.current
+    var deleting by remember { mutableStateOf<Track?>(null) }
+    var confirming by remember { mutableStateOf<Track?>(null) }
+    val deleteRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        // Android 11부터는 시스템이 이미 지웠고, 그 전에는 허락만 받았으므로 다시 지운다.
+        if (result.resultCode == Activity.RESULT_OK) {
+            deleting?.let {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) viewModel.forgetTrack(it) else viewModel.delete(it)
+            }
+        }
+        deleting = null
+    }
+    val delete = { track: Track ->
+        val sender = Library.requestDelete(context, track)
+        if (sender == null) {
+            viewModel.forgetTrack(track)
+        } else {
+            deleting = track
+            deleteRequest.launch(IntentSenderRequest.Builder(sender).build())
+        }
+    }
 
     confirming?.let { track ->
         AlertDialog(
             onDismissRequest = { confirming = null },
-            title = { Text("영구 삭제") },
+            title = { Text("기기에서 삭제") },
             text = { Text("'${track.title}' 파일을 기기에서 완전히 지웁니다. 되돌릴 수 없습니다.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirming = null
-                    deleteTrack(track)
+                    delete(track)
                 }) { Text("삭제") }
             },
             dismissButton = { TextButton(onClick = { confirming = null }) { Text("취소") } },
         )
     }
+
+    return { track -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) delete(track) else confirming = track }
 }

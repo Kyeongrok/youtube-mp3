@@ -51,6 +51,7 @@ object AppSettings {
     private const val KEY_RUMMIKUB_BLINK = "rummikubBlinkDuration"
     private const val KEY_LAST_SCREEN = "lastScreen"
     private const val KEY_HOME_ORDER = "homeOrder"
+    private const val KEY_MUSIC_TAB = "musicTab"
 
     fun loadTheme(context: Context): ThemeMode {
         val name = preferences(context).getString(KEY_THEME, null)
@@ -99,6 +100,13 @@ object AppSettings {
 
     fun saveLastScreen(context: Context, name: String) {
         preferences(context).edit().putString(KEY_LAST_SCREEN, name).apply()
+    }
+
+    /** 음악 화면에서 마지막으로 보던 탭의 번호다. */
+    fun loadMusicTab(context: Context) = preferences(context).getInt(KEY_MUSIC_TAB, 0)
+
+    fun saveMusicTab(context: Context, tab: Int) {
+        preferences(context).edit().putInt(KEY_MUSIC_TAB, tab).apply()
     }
 
     /** 처음 화면에서 사용자가 옮겨 놓은 타일 순서다. 화면 이름을 쉼표로 이어 저장한다. */

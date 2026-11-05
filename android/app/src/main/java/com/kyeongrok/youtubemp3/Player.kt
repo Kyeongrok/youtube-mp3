@@ -19,6 +19,8 @@ data class PlayerState(
     val durationMs: Int = 0,
     val queueIndex: Int = 0,
     val queueSize: Int = 0,
+    /** 지금 재생 순서대로 늘어놓은 곡들이다. 재생목록이든 내 음악이든 튼 곳의 목록이 그대로 들어온다. */
+    val queue: List<Track> = emptyList(),
 )
 
 object Player {
@@ -113,6 +115,11 @@ object Player {
         playFrom((state.value.queueIndex + 1) % queue.size)
     }
 
+    /** 재생 순서에서 고른 곡으로 바로 넘어간다. */
+    fun playAt(index: Int) {
+        if (index in queue.indices) playFrom(index)
+    }
+
     fun previous() {
         if (queue.isEmpty()) return
         playFrom((state.value.queueIndex - 1 + queue.size) % queue.size)
@@ -136,6 +143,7 @@ object Player {
                 durationMs = player.duration,
                 queueIndex = position,
                 queueSize = queue.size,
+                queue = queue,
             )
             return
         }

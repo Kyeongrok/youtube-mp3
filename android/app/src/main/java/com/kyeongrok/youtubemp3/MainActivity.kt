@@ -35,6 +35,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -240,13 +245,13 @@ private fun lightScheme(color: ColorTheme): ColorScheme {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainScreen(viewModel: MainViewModel) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    var tab by rememberSaveable { mutableIntStateOf(AppSettings.loadMusicTab(context)) }
     val downloads by Downloads.items.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
     val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
     val homeOrder by viewModel.homeOrder.collectAsStateWithLifecycle()
     var updateAsked by rememberSaveable { mutableStateOf(false) }
-    val context = LocalContext.current
     // 처음 켜면 마지막으로 쓰던 화면을, 기록이 없으면 앱 고르는 화면을 연다.
     var game by rememberSaveable {
         val last = AppSettings.loadLastScreen(context)
@@ -254,9 +259,17 @@ private fun MainScreen(viewModel: MainViewModel) {
     }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
 
+    var nowPlayingOpen by rememberSaveable { mutableStateOf(false) }
+    // 화면을 돌려 다시 그릴 때는 들어온 것으로 치지 않도록 직전 화면을 함께 기억한다.
+    var enteredGame by rememberSaveable { mutableStateOf<MiniGame?>(null) }
     LaunchedEffect(game) {
         if (game != MiniGame.Home) AppSettings.saveLastScreen(context, game.name)
+        // 음악 화면은 마지막에 보던 탭으로 열고, 노래가 나오고 있으면 지금 재생 중 목록을 위에 띄운다.
+        if (game != enteredGame && game == MiniGame.None && Player.state.value.isPlaying) nowPlayingOpen = true
+        enteredGame = game
     }
+    if (nowPlayingOpen) NowPlayingSheet(onDismiss = { nowPlayingOpen = false })
+    LaunchedEffect(tab) { AppSettings.saveMusicTab(context, tab) }
     BackHandler(game != MiniGame.Home) { game = MiniGame.Home }
 
     if (settingsOpen) SettingsDialog(viewModel, onDismiss = { settingsOpen = false })
@@ -297,7 +310,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                 MiniGame.None -> TopAppBar(title = { AppTitle() })
             }
         },
-        bottomBar = { PlayerBar() },
+        bottomBar = { PlayerBar(onOpen = { nowPlayingOpen = true }) },
         // 한 손으로 누르기 쉽게 메뉴는 오른쪽 아래에 둔다.
         floatingActionButton = {
             if (game == MiniGame.None) MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true })
@@ -585,9 +598,10 @@ private fun LibraryTab(viewModel: MainViewModel) {
         Text("받은 음악이 없습니다. 파일은 Music/YoutubeMp3에 저장됩니다.", Modifier.padding(16.dp))
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
-        items(tracks, key = { it.id }) { track ->
+        itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+            // 누른 곡부터 목록 끝까지 이어서 튼다.
             Row(
-                Modifier.fillMaxWidth().clickable { Player.play(context, track) }.padding(start = 16.dp),
+                Modifier.fillMaxWidth().clickable { Player.play(context, tracks, index) }.padding(start = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -630,8 +644,65 @@ private fun LibraryTab(viewModel: MainViewModel) {
     }
 }
 
+/** 재생 중인 곡과 그 뒤로 나올 곡들. 하단 재생바의 제목을 누르면 열린다. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlayerBar() {
+private fun NowPlayingSheet(onDismiss: () -> Unit) {
+    val state by Player.state.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = state.queueIndex)
+    val colors = MaterialTheme.colorScheme
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("지금 재생 중", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            if (state.queueSize > 0) {
+                Text("${state.queueIndex + 1} / ${state.queueSize}", color = colors.onSurfaceVariant)
+            }
+        }
+        if (state.queue.isEmpty()) {
+            Text("재생 중인 곡이 없습니다.", Modifier.padding(16.dp))
+        }
+        LazyColumn(state = listState, contentPadding = ListPadding) {
+            itemsIndexed(state.queue) { index, track ->
+                val current = index == state.queueIndex
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(if (current) colors.primaryContainer else colors.surfaceContainerLow)
+                        .clickable { if (!current) Player.playAt(index) }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.width(32.dp)) {
+                        if (current) {
+                            Icon(
+                                if (state.isPlaying) Icons.Filled.PlayArrow else AppIcons.Pause,
+                                contentDescription = null,
+                                tint = colors.primary,
+                            )
+                        } else {
+                            Text("${index + 1}", color = colors.onSurfaceVariant)
+                        }
+                    }
+                    Text(
+                        track.title,
+                        Modifier.weight(1f),
+                        color = if (current) colors.onPrimaryContainer else colors.onSurface,
+                        fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayerBar(onOpen: () -> Unit) {
     val state by Player.state.collectAsStateWithLifecycle()
     val track = state.track ?: return
     var dragPosition by remember { mutableStateOf<Float?>(null) }
@@ -646,7 +717,14 @@ private fun PlayerBar() {
     Surface(tonalElevation = 3.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(track.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // 제목을 누르면 지금 재생 중 목록이 열린다.
+                Row(
+                    Modifier.weight(1f).clickable(onClick = onOpen).padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "지금 재생 중 목록")
+                    Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 if (state.queueSize > 1) {
                     IconButton(onClick = Player::previous) {
                         Icon(AppIcons.SkipPrevious, contentDescription = "이전")

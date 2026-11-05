@@ -107,14 +107,15 @@ object Player {
         audioManager()?.abandonAudioFocusRequest(focusRequest)
     }
 
+    /** 마지막 곡에서 다음을 누르면 처음 곡으로, 첫 곡에서 이전을 누르면 마지막 곡으로 간다. */
     fun next() {
-        val index = state.value.queueIndex + 1
-        if (index < queue.size) playFrom(index)
+        if (queue.isEmpty()) return
+        playFrom((state.value.queueIndex + 1) % queue.size)
     }
 
     fun previous() {
-        val index = state.value.queueIndex - 1
-        if (index >= 0) playFrom(index)
+        if (queue.isEmpty()) return
+        playFrom((state.value.queueIndex - 1 + queue.size) % queue.size)
     }
 
     /** 파일이 지워졌거나 재생할 수 없으면 건너뛰고 뒤의 곡을 튼다. */
@@ -174,6 +175,12 @@ object Player {
         resumeOnGain = false
         queue = emptyList()
         mutableState.value = PlayerState()
+    }
+
+    /** 지금 위치에서 deltaMs만큼 앞뒤로 옮긴다. 곡의 처음과 끝을 넘지 않는다. */
+    fun seekBy(deltaMs: Int) {
+        val player = mediaPlayer ?: return
+        seekTo((player.currentPosition + deltaMs).coerceIn(0, player.duration))
     }
 
     fun seekTo(positionMs: Int) {

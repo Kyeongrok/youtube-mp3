@@ -37,6 +37,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableThemeMode = MutableStateFlow(AppSettings.loadTheme(application))
     val themeMode = mutableThemeMode.asStateFlow()
 
+    private val mutableHomeOrder = MutableStateFlow(AppSettings.loadHomeOrder(application))
+    val homeOrder = mutableHomeOrder.asStateFlow()
+
     private val mutableColorTheme = MutableStateFlow(AppSettings.loadColor(application))
     val colorTheme = mutableColorTheme.asStateFlow()
 
@@ -106,6 +109,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch { mutableUpdate.value = AppUpdate.findNewerRelease() }
+    }
+
+    fun setHomeOrder(order: List<String>) {
+        mutableHomeOrder.value = order
+        AppSettings.saveHomeOrder(getApplication(), order)
     }
 
     fun setThemeMode(mode: ThemeMode) {

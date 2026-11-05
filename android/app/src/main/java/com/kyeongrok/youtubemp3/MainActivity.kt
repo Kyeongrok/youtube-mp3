@@ -48,6 +48,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -58,6 +62,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -77,6 +82,21 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.zIndex
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -115,6 +135,12 @@ private val GAME_ENTRIES = listOf(
 )
 
 private val APP_ENTRIES = listOf(AppEntry("음악", AppIcons.Music, MiniGame.None)) + GAME_ENTRIES
+
+/** 저장된 순서대로 늘어놓고, 저장된 뒤에 새로 생긴 앱은 맨 뒤에 붙인다. */
+private fun orderedEntries(order: List<String>): List<AppEntry> {
+    val saved = order.mapNotNull { name -> APP_ENTRIES.find { it.target.name == name } }
+    return saved + APP_ENTRIES.filter { it !in saved }
+}
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -218,6 +244,7 @@ private fun MainScreen(viewModel: MainViewModel) {
     val downloads by Downloads.items.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
     val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
+    val homeOrder by viewModel.homeOrder.collectAsStateWithLifecycle()
     var updateAsked by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     // 처음 켜면 마지막으로 쓰던 화면을, 기록이 없으면 앱 고르는 화면을 연다.
@@ -267,13 +294,14 @@ private fun MainScreen(viewModel: MainViewModel) {
                         }
                     },
                 )
-                MiniGame.None -> TopAppBar(
-                    navigationIcon = { MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true }) },
-                    title = { AppTitle() },
-                )
+                MiniGame.None -> TopAppBar(title = { AppTitle() })
             }
         },
         bottomBar = { PlayerBar() },
+        // 한 손으로 누르기 쉽게 메뉴는 오른쪽 아래에 둔다.
+        floatingActionButton = {
+            if (game == MiniGame.None) MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true })
+        },
     ) { padding ->
         if (game == MiniGame.Home) {
             HomeScreen(
@@ -282,6 +310,8 @@ private fun MainScreen(viewModel: MainViewModel) {
                 updateProgress = updateProgress,
                 onInstall = viewModel::installUpdate,
                 onOpen = { game = it },
+                entries = remember(homeOrder) { orderedEntries(homeOrder) },
+                onReorder = { entries -> viewModel.setHomeOrder(entries.map { it.target.name }) },
             )
             return@Scaffold
         }
@@ -331,7 +361,7 @@ private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
     Box {
-        IconButton(onClick = { expanded = true }) {
+        FloatingActionButton(onClick = { expanded = true }) {
             Icon(Icons.Filled.Menu, contentDescription = "메뉴")
         }
         DropdownMenu(expanded, { expanded = false }) {
@@ -618,10 +648,11 @@ private fun PlayerBar() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(track.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (state.queueSize > 1) {
-                    IconButton(onClick = Player::previous, enabled = state.queueIndex > 0) {
+                    IconButton(onClick = Player::previous) {
                         Icon(AppIcons.SkipPrevious, contentDescription = "이전")
                     }
                 }
+                SeekButton(forward = false)
                 FilledIconButton(onClick = Player::togglePause) {
                     if (state.isPlaying) {
                         Icon(AppIcons.Pause, contentDescription = "일시정지")
@@ -629,8 +660,9 @@ private fun PlayerBar() {
                         Icon(Icons.Filled.PlayArrow, contentDescription = "재생")
                     }
                 }
+                SeekButton(forward = true)
                 if (state.queueSize > 1) {
-                    IconButton(onClick = Player::next, enabled = state.queueIndex < state.queueSize - 1) {
+                    IconButton(onClick = Player::next) {
                         Icon(AppIcons.SkipNext, contentDescription = "다음")
                     }
                 }
@@ -648,6 +680,21 @@ private fun PlayerBar() {
     }
 }
 
+/** 둥근 화살표 안에 10을 적은 10초 앞/뒤 버튼. 뒤로 갈 때는 화살표를 좌우로 뒤집는다. */
+@Composable
+private fun SeekButton(forward: Boolean) {
+    IconButton(onClick = { Player.seekBy(if (forward) 10_000 else -10_000) }) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Filled.Refresh,
+                contentDescription = if (forward) "10초 앞으로" else "10초 뒤로",
+                modifier = Modifier.size(28.dp).graphicsLayer { scaleX = if (forward) 1f else -1f },
+            )
+            Text("10", fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
 @Composable
 private fun AppTitle() {
     Row(verticalAlignment = Alignment.Bottom) {
@@ -661,7 +708,13 @@ private fun AppTitle() {
     }
 }
 
-/** 앱을 고르는 첫 화면이다. 음악과 게임들을 바둑판처럼 늘어놓는다. */
+/** 타일을 이만큼 누르고 있으면 들어 올려 옮길 수 있다. */
+private const val HOME_HOLD_MILLIS = 3000L
+
+/**
+ * 앱을 고르는 첫 화면이다. 음악과 게임들을 바둑판처럼 늘어놓는다.
+ * 안드로이드 홈 화면처럼 타일을 누르고 있으면 들어 올려 다른 자리로 끌어 옮길 수 있다.
+ */
 @Composable
 private fun HomeScreen(
     modifier: Modifier,
@@ -669,7 +722,51 @@ private fun HomeScreen(
     updateProgress: Float?,
     onInstall: () -> Unit,
     onOpen: (MiniGame) -> Unit,
+    entries: List<AppEntry>,
+    onReorder: (List<AppEntry>) -> Unit,
 ) {
+    var order by remember { mutableStateOf(entries) }
+    var pressed by remember { mutableStateOf<MiniGame?>(null) }
+    var dragged by remember { mutableStateOf<MiniGame?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    val latestEntries by rememberUpdatedState(entries)
+    val gridState = rememberLazyGridState()
+    val haptic = LocalHapticFeedback.current
+    LaunchedEffect(entries) { if (dragged == null) order = entries }
+
+    // 끄는 타일의 가운데가 다른 타일 위에 오면 그 자리로 옮긴다.
+    // 옮긴 만큼 타일의 원래 자리가 바뀌므로 끄는 거리에서 그만큼 빼서 손가락 아래에 그대로 둔다.
+    fun dragBy(delta: Offset) {
+        val key = dragged ?: return
+        dragOffset += delta
+        val items = gridState.layoutInfo.visibleItemsInfo
+        val current = items.find { it.key == key.name } ?: return
+        val center = Offset(
+            current.offset.x + dragOffset.x + current.size.width / 2f,
+            current.offset.y + dragOffset.y + current.size.height / 2f,
+        )
+        val target = items.find {
+            it.key != key.name &&
+                center.x >= it.offset.x && center.x <= it.offset.x + it.size.width &&
+                center.y >= it.offset.y && center.y <= it.offset.y + it.size.height
+        } ?: return
+        order = order.toMutableList().apply { add(target.index, removeAt(current.index)) }
+        dragOffset += Offset(
+            (current.offset.x - target.offset.x).toFloat(),
+            (current.offset.y - target.offset.y).toFloat(),
+        )
+    }
+
+    fun endDrag() {
+        if (order != latestEntries) onReorder(order)
+        dragged = null
+        dragOffset = Offset.Zero
+    }
+
+    val latestDragBy by rememberUpdatedState<(Offset) -> Unit> { dragBy(it) }
+    val latestEndDrag by rememberUpdatedState<() -> Unit> { endDrag() }
+    val latestOnOpen by rememberUpdatedState(onOpen)
+
     Column(modifier.fillMaxSize()) {
         update?.let { version ->
             if (updateProgress == null) {
@@ -682,12 +779,81 @@ private fun HomeScreen(
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(104.dp),
+            state = gridState,
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(APP_ENTRIES) { entry ->
-                ElevatedCard(onClick = { onOpen(entry.target) }) {
+            items(order, key = { it.target.name }) { entry ->
+                val isDragged = entry.target == dragged
+                // 누르고 있는 동안 천천히 눌려 들어가다가, 들어 올리면 커진다.
+                val scale by animateFloatAsState(
+                    targetValue = when {
+                        isDragged -> 1.1f
+                        entry.target == pressed -> 0.92f
+                        else -> 1f
+                    },
+                    animationSpec = if (entry.target == pressed && !isDragged) {
+                        tween(HOME_HOLD_MILLIS.toInt())
+                    } else {
+                        spring()
+                    },
+                    label = "tileScale",
+                )
+                val itemModifier = if (isDragged) {
+                    Modifier.zIndex(1f).graphicsLayer {
+                        translationX = dragOffset.x
+                        translationY = dragOffset.y
+                    }
+                } else {
+                    Modifier.animateItem()
+                }
+                ElevatedCard(
+                    modifier = itemModifier
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .pointerInput(entry.target) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                pressed = entry.target
+                                // true는 손을 뗌(누름), false는 움직이거나 목록이 스크롤됨, null은 오래 누름이다.
+                                val released = withTimeoutOrNull(HOME_HOLD_MILLIS) {
+                                    var result = false
+                                    while (true) {
+                                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                                        if (change == null || !change.pressed) {
+                                            result = change != null && !change.isConsumed
+                                            break
+                                        }
+                                        if (change.isConsumed ||
+                                            (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+                                        ) {
+                                            break
+                                        }
+                                    }
+                                    result
+                                }
+                                pressed = null
+                                when (released) {
+                                    true -> latestOnOpen(entry.target)
+                                    false -> Unit
+                                    null -> {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        dragged = entry.target
+                                        dragOffset = Offset.Zero
+                                        drag(down.id) { change ->
+                                            latestDragBy(change.positionChange())
+                                            change.consume()
+                                        }
+                                        latestEndDrag()
+                                    }
+                                }
+                            }
+                        },
+                    elevation = if (isDragged) CardDefaults.elevatedCardElevation(defaultElevation = 8.dp) else CardDefaults.elevatedCardElevation(),
+                ) {
                     Column(
                         Modifier.fillMaxWidth().padding(vertical = 18.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,

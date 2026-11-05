@@ -50,6 +50,7 @@ object AppSettings {
     private const val KEY_RUMMIKUB_TABLE_SIZE = "rummikubTableSize"
     private const val KEY_RUMMIKUB_BLINK = "rummikubBlinkDuration"
     private const val KEY_LAST_SCREEN = "lastScreen"
+    private const val KEY_HOME_ORDER = "homeOrder"
 
     fun loadTheme(context: Context): ThemeMode {
         val name = preferences(context).getString(KEY_THEME, null)
@@ -98,6 +99,14 @@ object AppSettings {
 
     fun saveLastScreen(context: Context, name: String) {
         preferences(context).edit().putString(KEY_LAST_SCREEN, name).apply()
+    }
+
+    /** 처음 화면에서 사용자가 옮겨 놓은 타일 순서다. 화면 이름을 쉼표로 이어 저장한다. */
+    fun loadHomeOrder(context: Context): List<String> =
+        preferences(context).getString(KEY_HOME_ORDER, null)?.split(',')?.filter { it.isNotEmpty() }.orEmpty()
+
+    fun saveHomeOrder(context: Context, order: List<String>) {
+        preferences(context).edit().putString(KEY_HOME_ORDER, order.joinToString(",")).apply()
     }
 
     private fun preferences(context: Context) = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)

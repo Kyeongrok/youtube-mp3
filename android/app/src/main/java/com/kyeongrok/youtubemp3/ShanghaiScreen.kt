@@ -65,6 +65,16 @@ private const val TILE_RATIO = 1.3f
 
 private val NUMERALS = listOf("一", "二", "三", "四", "五", "六", "七", "八", "九")
 private val HONORS = listOf("東", "南", "西", "北", "中", "發", "白")
+private val KOREAN_NUMBERS = listOf("일", "이", "삼", "사", "오", "육", "칠", "팔", "구")
+private val HONOR_NAMES = listOf("동풍", "남풍", "서풍", "북풍", "중", "발", "백")
+
+/** 탭한 패를 아래에 보여 줄 이름. 예: 삼만, 칠통, 구삭, 동풍. */
+private fun tileName(face: Int): String = when (face / 9) {
+    0 -> "${KOREAN_NUMBERS[face % 9]}만"
+    1 -> "${KOREAN_NUMBERS[face % 9]}통"
+    2 -> "${KOREAN_NUMBERS[face % 9]}삭"
+    else -> HONOR_NAMES[face - 27]
+}
 
 // 숫자패의 무늬를 줄마다 몇 개씩 놓을지 정한다.
 private val PIP_ROWS = listOf(
@@ -126,6 +136,13 @@ fun ShanghaiScreen(viewModel: MainViewModel) {
         }
     }
 
+    // 마지막으로 탭한 패 무늬. 막힌 패도 이름은 볼 수 있다.
+    var tappedFace by rememberSaveable { mutableStateOf<Int?>(null) }
+    val onTap = { index: Int ->
+        current?.let { tappedFace = it.faces[index] }
+        viewModel.pickShanghai(index)
+    }
+
     val game = current
     if (game == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -140,24 +157,24 @@ fun ShanghaiScreen(viewModel: MainViewModel) {
                 (maxHeight - depth) / Shanghai.ROWS / TILE_RATIO,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ShanghaiBoard(game, tileWidth, viewModel)
-                ShanghaiControls(game, viewModel, Modifier.weight(1f))
+                ShanghaiBoard(game, tileWidth, onTap)
+                ShanghaiControls(game, tappedFace, viewModel, Modifier.weight(1f))
             }
         } else {
             val tileWidth = min(
                 (maxWidth - depth) / Shanghai.COLUMNS,
-                (maxHeight - 100.dp - depth) / Shanghai.ROWS / TILE_RATIO,
+                (maxHeight - 130.dp - depth) / Shanghai.ROWS / TILE_RATIO,
             )
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                ShanghaiBoard(game, tileWidth, viewModel)
-                ShanghaiControls(game, viewModel, Modifier.fillMaxWidth())
+                ShanghaiBoard(game, tileWidth, onTap)
+                ShanghaiControls(game, tappedFace, viewModel, Modifier.fillMaxWidth())
             }
         }
     }
 }
 
 @Composable
-private fun ShanghaiBoard(game: ShanghaiGame, tileWidth: Dp, viewModel: MainViewModel) {
+private fun ShanghaiBoard(game: ShanghaiGame, tileWidth: Dp, onTap: (Int) -> Unit) {
     val tileHeight = tileWidth * TILE_RATIO
 
     Box(
@@ -186,7 +203,7 @@ private fun ShanghaiBoard(game: ShanghaiGame, tileWidth: Dp, viewModel: MainView
                             tileWidth * spot.column + LayerShift * (3 - spot.layer),
                             tileHeight * spot.row + LayerShift * (3 - spot.layer),
                         )
-                        .clickable(enabled = free) { viewModel.pickShanghai(index) },
+                        .clickable { onTap(index) },
                 )
             }
         }
@@ -272,7 +289,7 @@ private fun PipFace(number: Int, color: Color, round: Boolean) {
 }
 
 @Composable
-private fun ShanghaiControls(game: ShanghaiGame, viewModel: MainViewModel, modifier: Modifier) {
+private fun ShanghaiControls(game: ShanghaiGame, tappedFace: Int?, viewModel: MainViewModel, modifier: Modifier) {
     Column(modifier.padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             when {
@@ -282,6 +299,13 @@ private fun ShanghaiControls(game: ShanghaiGame, viewModel: MainViewModel, modif
             },
             color = if (game.isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
+        if (tappedFace != null && !game.isComplete) {
+            Text(
+                "패: ${tileName(tappedFace)}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = viewModel::showShanghaiHint, enabled = game.freePair != null) { Text("힌트") }
             TextButton(onClick = viewModel::shuffleShanghai, enabled = !game.isComplete) { Text("섞기") }

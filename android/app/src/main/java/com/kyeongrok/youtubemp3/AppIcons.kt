@@ -91,6 +91,27 @@ object AppIcons {
         }
     }
 
+    /** 세워 놓은 마작 패와 그 아래 리치 막대. */
+    val Riichi: ImageVector = materialIcon("App.Riichi") {
+        materialPath(pathFillType = PathFillType.EvenOdd) {
+            moveTo(6f, 2f); horizontalLineToRelative(12f); verticalLineToRelative(14f); horizontalLineTo(6f); close()
+            moveTo(8f, 4f); verticalLineToRelative(10f); horizontalLineToRelative(8f); verticalLineTo(4f); close()
+        }
+        materialPath {
+            moveTo(12f, 6.5f)
+            arcToRelative(2.5f, 2.5f, 0f, true, true, 0f, 5f)
+            arcToRelative(2.5f, 2.5f, 0f, true, true, 0f, -5f)
+            close()
+        }
+        materialPath(pathFillType = PathFillType.EvenOdd) {
+            moveTo(2f, 18.5f); horizontalLineToRelative(20f); verticalLineToRelative(3f); horizontalLineTo(2f); close()
+            moveTo(12f, 19.2f)
+            arcToRelative(0.8f, 0.8f, 0f, true, true, 0f, 1.6f)
+            arcToRelative(0.8f, 0.8f, 0f, true, true, 0f, -1.6f)
+            close()
+        }
+    }
+
     /** 다이아몬드가 그려진 카드. */
     val FreeCell: ImageVector = materialIcon("App.FreeCell") {
         materialPath(pathFillType = PathFillType.EvenOdd) {

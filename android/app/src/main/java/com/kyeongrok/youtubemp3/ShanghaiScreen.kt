@@ -48,46 +48,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val TileFace = Color(0xFFF7F1E1)
-private val TileEdge = Color(0xFFB9A67E)
-private val TileLine = Color(0xFF7A6A4A)
 private val TileBlocked = Color(0xFFDAD2BE)
 private val TileSelected = Color(0xFFFFD54F)
 private val TileHint = Color(0xFFAED581)
-private val InkRed = Color(0xFFB71C1C)
-private val InkBlue = Color(0xFF1565C0)
-private val InkGreen = Color(0xFF2E7D32)
-private val InkBlack = Color(0xFF212121)
 
 private val TileShape = RoundedCornerShape(4.dp)
 private val LayerShift = 3.dp
 private const val TILE_RATIO = 1.3f
-
-private val NUMERALS = listOf("一", "二", "三", "四", "五", "六", "七", "八", "九")
-private val HONORS = listOf("東", "南", "西", "北", "中", "發", "白")
-private val KOREAN_NUMBERS = listOf("일", "이", "삼", "사", "오", "육", "칠", "팔", "구")
-private val HONOR_NAMES = listOf("동풍", "남풍", "서풍", "북풍", "중", "발", "백")
-
-/** 탭한 패를 아래에 보여 줄 이름. 예: 삼만, 칠통, 구삭, 동풍. */
-private fun tileName(face: Int): String = when (face / 9) {
-    0 -> "${KOREAN_NUMBERS[face % 9]}만"
-    1 -> "${KOREAN_NUMBERS[face % 9]}통"
-    2 -> "${KOREAN_NUMBERS[face % 9]}삭"
-    else -> HONOR_NAMES[face - 27]
-}
-
-// 숫자패의 무늬를 줄마다 몇 개씩 놓을지 정한다.
-private val PIP_ROWS = listOf(
-    listOf(1),
-    listOf(1, 1),
-    listOf(1, 1, 1),
-    listOf(2, 2),
-    listOf(2, 1, 2),
-    listOf(2, 2, 2),
-    listOf(2, 3, 2),
-    listOf(3, 2, 3),
-    listOf(3, 3, 3),
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -193,7 +160,7 @@ private fun ShanghaiBoard(game: ShanghaiGame, tileWidth: Dp, onTap: (Int) -> Uni
                     background = when {
                         index == game.selected -> TileSelected
                         game.hint?.let { index == it.first || index == it.second } == true -> TileHint
-                        free -> TileFace
+                        free -> MjTileFace
                         else -> TileBlocked
                     },
                     width = tileWidth,
@@ -218,73 +185,15 @@ private fun ShanghaiTile(face: Int, layer: Int, background: Color, width: Dp, he
     Box(
         modifier
             .size(width, height)
-            .background(TileEdge, TileShape)
-            .border(1.dp, TileLine, TileShape)
+            .background(MjTileEdge, TileShape)
+            .border(1.dp, MjTileLine, TileShape)
             .padding(end = side, bottom = side)
             .background(background, TileShape)
-            .border(1.dp, TileLine, TileShape)
+            .border(1.dp, MjTileLine, TileShape)
             .padding(2.dp),
         contentAlignment = Alignment.Center,
     ) {
-        when (face / 9) {
-            0 -> NumberFace(face % 9, height)
-            1 -> PipFace(face % 9, InkBlue, round = true)
-            2 -> PipFace(face % 9, InkGreen, round = false)
-            else -> HonorFace(face - 27, height)
-        }
-    }
-}
-
-@Composable
-private fun NumberFace(number: Int, height: Dp) {
-    val fontSize = with(LocalDensity.current) { (height * 0.3f).toSp() }
-    Text(
-        "${NUMERALS[number]}\n萬",
-        color = InkRed,
-        fontSize = fontSize,
-        lineHeight = fontSize,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center,
-    )
-}
-
-@Composable
-private fun HonorFace(honor: Int, height: Dp) {
-    Text(
-        HONORS[honor],
-        color = when (HONORS[honor]) {
-            "中" -> InkRed
-            "發" -> InkGreen
-            else -> InkBlack
-        },
-        fontSize = with(LocalDensity.current) { (height * 0.5f).toSp() },
-        fontWeight = FontWeight.Bold,
-    )
-}
-
-/** 통수는 동그라미, 삭수는 세로 막대로 무늬를 그린다. */
-@Composable
-private fun PipFace(number: Int, color: Color, round: Boolean) {
-    Canvas(Modifier.fillMaxSize()) {
-        val rows = PIP_ROWS[number]
-        val pip = minOf(size.width / 3, size.height / rows.size) * 0.8f
-        rows.forEachIndexed { row, count ->
-            val y = size.height * (row + 0.5f) / rows.size
-            for (column in 0 until count) {
-                val x = size.width * (column + 0.5f) / count
-                if (round) {
-                    drawCircle(color, pip / 2, Offset(x, y))
-                } else {
-                    drawLine(
-                        color,
-                        Offset(x, y - pip / 2),
-                        Offset(x, y + pip / 2),
-                        strokeWidth = pip / 3,
-                        cap = StrokeCap.Round,
-                    )
-                }
-            }
-        }
+        MahjongFace(face, height)
     }
 }
 

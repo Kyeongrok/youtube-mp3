@@ -372,7 +372,8 @@ fun RiichiScreen() {
     BoxWithConstraints(Modifier.fillMaxSize().background(TableGreen).padding(6.dp)) {
         // 내 손패는 두 줄로 크게 보여 준다. 한 줄에 7장과 뽑은 패 자리까지 들어가게 한다.
         val handWidth = min((maxWidth - 24.dp) / 8, 60.dp)
-        val small = min((maxWidth - 12.dp) / 15 * 0.72f, 26.dp)
+        // 버림패는 한 줄에 10장쯤 들어가게 키운다. 많아지면 위쪽 칸이 스크롤된다.
+        val small = min((maxWidth - 24.dp) / 10, 40.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             InfoBar(table, small)
             Column(

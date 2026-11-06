@@ -15,6 +15,12 @@ import java.net.URL
 
 data class AppRelease(val version: String, val apkUrl: String)
 
+sealed interface UpdateCheck {
+    data class Newer(val release: AppRelease) : UpdateCheck
+    data class UpToDate(val latest: String) : UpdateCheck
+    data class Failed(val message: String) : UpdateCheck
+}
+
 /** GitHub 최신 릴리즈가 지금 판보다 새로우면 이 폰에 맞는 APK를 받아 PackageInstaller로 깐다. */
 object AppUpdate {
     private const val API_URL = "https://api.github.com/repos/Kyeongrok/youtube-mp3/releases/latest"
@@ -25,8 +31,11 @@ object AppUpdate {
         "armeabi-v7a" to "-android-armv7.apk",
     )
 
-    /** 이 폰에 맞는 APK가 아직 릴리즈에 붙지 않았으면 null이다. */
-    suspend fun findNewerRelease(): AppRelease? = withContext(Dispatchers.IO) {
+    /** 켤 때 자동 확인용. 새 버전이 없거나 확인하지 못했으면 null이다. */
+    suspend fun findNewerRelease(): AppRelease? = (check() as? UpdateCheck.Newer)?.release
+
+    /** 최신 릴리즈와 지금 버전을 비교한다. 직접 확인할 때는 왜 안 되는지도 알려 준다. */
+    suspend fun check(): UpdateCheck = withContext(Dispatchers.IO) {
         try {
             val connection = URL(API_URL).openConnection() as HttpURLConnection
             connection.connectTimeout = 10_000
@@ -34,15 +43,18 @@ object AppUpdate {
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             val release = JSONObject(body)
             val latest = release.getString("tag_name").removePrefix("v")
-            if (!isNewer(latest, BuildConfig.VERSION_NAME)) return@withContext null
+            if (!isNewer(latest, BuildConfig.VERSION_NAME)) return@withContext UpdateCheck.UpToDate(latest)
 
-            val suffix = Build.SUPPORTED_ABIS.firstNotNullOfOrNull(APK_SUFFIXES::get) ?: return@withContext null
+            val suffix = Build.SUPPORTED_ABIS.firstNotNullOfOrNull(APK_SUFFIXES::get)
+                ?: return@withContext UpdateCheck.Failed("이 폰에 맞는 설치 파일이 없습니다.")
             val assets = release.getJSONArray("assets")
             List(assets.length()) { assets.getJSONObject(it).getString("browser_download_url") }
                 .firstOrNull { it.endsWith(suffix) }
-                ?.let { AppRelease(latest, it) }
-        } catch (_: Exception) {
-            null
+                ?.let { UpdateCheck.Newer(AppRelease(latest, it)) }
+                // 태그는 올라왔는데 빌드가 아직 끝나지 않은 때다.
+                ?: UpdateCheck.Failed("새 버전 ${latest}을 준비 중입니다. 잠시 뒤 다시 확인해 주세요.")
+        } catch (e: Exception) {
+            UpdateCheck.Failed("업데이트를 확인하지 못했습니다. 인터넷 연결을 확인해 주세요.")
         }
     }
 

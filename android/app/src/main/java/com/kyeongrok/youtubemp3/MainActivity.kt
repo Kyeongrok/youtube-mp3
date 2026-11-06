@@ -124,6 +124,9 @@ import kotlinx.coroutines.delay
 import android.widget.Toast
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import android.app.Activity
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 
 // 목록 끝 항목이 화면 아래에 붙지 않도록 조금 띄운다.
 internal val ListPadding = PaddingValues(bottom = 16.dp)
@@ -281,7 +284,59 @@ private fun MainScreen(viewModel: MainViewModel) {
     LaunchedEffect(tab) { AppSettings.saveMusicTab(context, tab) }
     BackHandler(game != MiniGame.Home) { game = MiniGame.Home }
 
-    if (settingsOpen) SettingsDialog(viewModel, onDismiss = { settingsOpen = false })
+    val checkingUpdate by viewModel.checkingUpdate.collectAsStateWithLifecycle()
+    var confirmExit by remember { mutableStateOf(false) }
+    val checkUpdate = {
+        viewModel.checkForUpdate { result ->
+            when (result) {
+                // 예전에 '나중에'를 눌렀어도 직접 확인했으면 설치 안내를 다시 띄운다.
+                is UpdateCheck.Newer -> updateAsked = false
+                is UpdateCheck.UpToDate ->
+                    Toast.makeText(context, "최신 버전입니다 (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
+                is UpdateCheck.Failed -> Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val exitApp = {
+        Downloads.items.value
+            .filter { it.status == DownloadStatus.Queued || it.status == DownloadStatus.Running }
+            .forEach { Downloads.cancel(it.id) }
+        // 재생을 멈추면 재생 알림과 서비스도 스스로 내려간다.
+        Player.stop()
+        (context as? Activity)?.finishAndRemoveTask()
+        Unit
+    }
+    val requestExit = {
+        val busy = Downloads.items.value.any { it.status == DownloadStatus.Queued || it.status == DownloadStatus.Running }
+        if (busy) confirmExit = true else exitApp()
+    }
+    if (confirmExit) {
+        AlertDialog(
+            onDismissRequest = { confirmExit = false },
+            title = { Text("앱 종료") },
+            text = { Text("진행 중인 다운로드가 취소됩니다. 종료할까요?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmExit = false
+                    exitApp()
+                }) { Text("종료") }
+            },
+            dismissButton = { TextButton(onClick = { confirmExit = false }) { Text("취소") } },
+        )
+    }
+
+    if (settingsOpen) {
+        SettingsDialog(
+            viewModel,
+            onDismiss = { settingsOpen = false },
+            checkingUpdate = checkingUpdate,
+            onCheckUpdate = checkUpdate,
+            onExit = {
+                settingsOpen = false
+                requestExit()
+            },
+        )
+    }
 
     update?.takeIf { !updateAsked }?.let { release ->
         AlertDialog(
@@ -322,7 +377,14 @@ private fun MainScreen(viewModel: MainViewModel) {
         bottomBar = { PlayerBar(onOpen = { nowPlayingOpen = true }) },
         // 한 손으로 누르기 쉽게 메뉴는 오른쪽 아래에 둔다.
         floatingActionButton = {
-            if (game == MiniGame.None) MenuButton(onGame = { game = it }, onSettings = { settingsOpen = true })
+            if (game == MiniGame.None) {
+                MenuButton(
+                    onGame = { game = it },
+                    onSettings = { settingsOpen = true },
+                    onCheckUpdate = checkUpdate,
+                    onExit = requestExit,
+                )
+            }
         },
     ) { padding ->
         if (game == MiniGame.Home) {
@@ -379,7 +441,12 @@ private fun MainScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
+private fun MenuButton(
+    onGame: (MiniGame) -> Unit,
+    onSettings: () -> Unit,
+    onCheckUpdate: () -> Unit,
+    onExit: () -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
 
     Box {
@@ -415,13 +482,35 @@ private fun MenuButton(onGame: (MiniGame) -> Unit, onSettings: () -> Unit) {
                     onSettings()
                 },
             )
+            DropdownMenuItem(
+                text = { Text("업데이트 확인") },
+                leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onCheckUpdate()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("앱 종료") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onExit()
+                },
+            )
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SettingsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
+private fun SettingsDialog(
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit,
+    checkingUpdate: Boolean,
+    onCheckUpdate: () -> Unit,
+    onExit: () -> Unit,
+) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
     val tableSize by viewModel.rummikubTableSize.collectAsStateWithLifecycle()
@@ -482,6 +571,17 @@ private fun SettingsDialog(viewModel: MainViewModel, onDismiss: () -> Unit) {
                             label = { Text(duration.label, maxLines = 1) },
                         )
                     }
+                }
+                Text(
+                    "앱 (지금 v${BuildConfig.VERSION_NAME})",
+                    Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onCheckUpdate, enabled = !checkingUpdate) {
+                        Text(if (checkingUpdate) "확인 중..." else "업데이트 확인")
+                    }
+                    OutlinedButton(onClick = onExit) { Text("앱 종료") }
                 }
             }
         },

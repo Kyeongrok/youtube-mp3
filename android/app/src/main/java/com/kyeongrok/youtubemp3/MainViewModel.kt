@@ -136,6 +136,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         AppSettings.saveRummikubBlinkDuration(getApplication(), duration)
     }
 
+    private val mutableCheckingUpdate = MutableStateFlow(false)
+    val checkingUpdate = mutableCheckingUpdate.asStateFlow()
+
+    /** 설정·메뉴에서 직접 누른 업데이트 확인. 새 버전이 있으면 설치 안내가 다시 뜨도록 넘겨준다. */
+    fun checkForUpdate(onResult: (UpdateCheck) -> Unit) {
+        if (mutableCheckingUpdate.value) return
+        mutableCheckingUpdate.value = true
+        viewModelScope.launch {
+            val result = AppUpdate.check()
+            if (result is UpdateCheck.Newer) mutableUpdate.value = result.release
+            mutableCheckingUpdate.value = false
+            onResult(result)
+        }
+    }
+
     fun installUpdate() {
         val release = mutableUpdate.value ?: return
         if (mutableUpdateProgress.value != null) return

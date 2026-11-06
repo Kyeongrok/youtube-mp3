@@ -5,6 +5,7 @@ import android.app.RecoverableSecurityException
 import android.content.IntentSender
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
@@ -20,6 +21,7 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -71,6 +73,7 @@ import kotlin.math.min
 
 private const val MIN_VIEW_SECONDS = 0.5
 private const val NUDGE_SECONDS = 0.1
+private const val MAX_GAIN_DB = 20.0
 
 /**
  * 곡 하나를 열어 필요 없는 구간을 잘라 내는 전체 화면 편집기(데스크톱 편집기의 모바일판).
@@ -87,6 +90,10 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
     var undo by remember { mutableStateOf(emptyList<List<TimeRange>>()) }
     // 마지막으로 저장한 편집 상태. 지금 목록과 다르면 저장할 것이 남은 것이다.
     var savedRemoved by remember { mutableStateOf(emptyList<TimeRange>()) }
+    // 곡 전체 볼륨(dB). 잘라낸 구간과 함께 저장할 때 반영한다.
+    var gainDb by remember { mutableDoubleStateOf(0.0) }
+    var savedGain by remember { mutableDoubleStateOf(0.0) }
+    val enhancer = remember { mutableStateOf<LoudnessEnhancer?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var confirmClose by remember { mutableStateOf(false) }
     var confirmOverwrite by remember { mutableStateOf(false) }
@@ -120,15 +127,42 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
                 prepare()
                 setOnCompletionListener { playing = false }
             }
+            // 미리 듣기에서 볼륨을 키우려면 증폭기가 필요하다. 못 만들면 줄이는 것만 들린다.
+            enhancer.value = try {
+                LoudnessEnhancer(player.value!!.audioSessionId)
+            } catch (e: Exception) {
+                null
+            }
         } catch (e: Exception) {
             loadError = e.message ?: e.toString()
         }
     }
     DisposableEffect(Unit) {
         onDispose {
+            enhancer.value?.release()
+            enhancer.value = null
             player.value?.release()
             player.value = null
             AudioTrimmer.clear(context)
+        }
+    }
+
+    // 볼륨을 바꾸면 미리 듣기에도 바로 반영한다.
+    LaunchedEffect(gainDb, player.value, enhancer.value) {
+        val mp = player.value ?: return@LaunchedEffect
+        val boost = enhancer.value
+        try {
+            if (gainDb > 0 && boost != null) {
+                mp.setVolume(1f, 1f)
+                boost.setTargetGain((gainDb * 100).toInt())
+                boost.enabled = true
+            } else {
+                boost?.enabled = false
+                val volume = Math.pow(10.0, min(gainDb, 0.0) / 20).toFloat()
+                mp.setVolume(volume, volume)
+            }
+        } catch (e: Exception) {
+            // 효과를 못 거는 기기에서도 저장에는 그대로 반영된다.
         }
     }
 
@@ -217,9 +251,9 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
         viewModel.refreshDeviceTracks()
     }
 
-    var pendingOverwrite by remember { mutableStateOf<Pair<File, List<TimeRange>>?>(null) }
+    var pendingOverwrite by remember { mutableStateOf<Triple<File, List<TimeRange>, Double>?>(null) }
     val writeRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        val (file, snapshot) = pendingOverwrite ?: (null to emptyList())
+        val (file, snapshot, gainSnapshot) = pendingOverwrite ?: Triple(null, emptyList(), 0.0)
         pendingOverwrite = null
         if (result.resultCode != Activity.RESULT_OK || file == null) {
             busy = null
@@ -229,6 +263,7 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
             try {
                 AudioTrimmer.overwrite(context, file, track.uri)
                 savedRemoved = snapshot
+                savedGain = gainSnapshot
                 refreshLists()
                 Toast.makeText(context, "원본에 저장했습니다.", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
@@ -244,11 +279,13 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
         stopPlaying()
         busy = "저장하는 중..."
         val snapshot = removed
+        val gainSnapshot = gainDb
         scope.launch {
             try {
-                val file = AudioTrimmer.render(context, s, snapshot, "mp3")
+                val file = AudioTrimmer.render(context, s, snapshot, "mp3", gainSnapshot)
                 AudioTrimmer.saveAsNew(context, file, track.title)
                 savedRemoved = snapshot
+                savedGain = gainSnapshot
                 refreshLists()
                 Toast.makeText(context, "'${track.title} (편집)'으로 저장했습니다.", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
@@ -265,9 +302,10 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
         Player.stopIfPlaying(track)
         busy = "저장하는 중..."
         val snapshot = removed
+        val gainSnapshot = gainDb
         scope.launch {
             val file = try {
-                AudioTrimmer.render(context, s, snapshot)
+                AudioTrimmer.render(context, s, snapshot, gainDb = gainSnapshot)
             } catch (e: Exception) {
                 Toast.makeText(context, "저장 실패: ${e.message}", Toast.LENGTH_LONG).show()
                 busy = null
@@ -276,6 +314,7 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
             try {
                 AudioTrimmer.overwrite(context, file, track.uri)
                 savedRemoved = snapshot
+                savedGain = gainSnapshot
                 refreshLists()
                 Toast.makeText(context, "원본에 저장했습니다.", Toast.LENGTH_SHORT).show()
                 busy = null
@@ -291,7 +330,7 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
                     Toast.makeText(context, "이 파일은 고칠 수 없습니다. 새 파일로 저장해 주세요.", Toast.LENGTH_LONG).show()
                     busy = null
                 } else {
-                    pendingOverwrite = file to snapshot
+                    pendingOverwrite = Triple(file, snapshot, gainSnapshot)
                     writeRequest.launch(IntentSenderRequest.Builder(sender).build())
                 }
             } catch (e: Exception) {
@@ -302,20 +341,76 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
     }
 
     val close = {
-        if (removed != savedRemoved) confirmClose = true else onDismiss()
+        if (removed != savedRemoved || gainDb != savedGain) confirmClose = true else onDismiss()
     }
 
     BackHandler { if (busy == null) close() }
 
     Box(Modifier.fillMaxSize()) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+                // 가로 화면은 높이가 낮아서 재생 버튼이 밀려나지 않도록 파형을 줄이고 줄 수를 아낀다.
+                val landscape = maxWidth > maxHeight
+                val waveHeight = if (landscape) (maxHeight * 0.3f).coerceIn(64.dp, 180.dp) else 180.dp
+
+                @Composable
+                fun SaveButtons(modifier: Modifier) {
+                    OutlinedButton(
+                        onClick = ::saveNew,
+                        enabled = (removed.isNotEmpty() || gainDb != 0.0) && busy == null,
+                        modifier = modifier,
+                    ) { Text("새 파일로 저장") }
+                    Button(
+                        onClick = { confirmOverwrite = true },
+                        enabled = (removed.isNotEmpty() || gainDb != 0.0) && busy == null && src?.canOverwrite == true,
+                        modifier = modifier,
+                    ) { Text("원본에 저장") }
+                }
+
+                @Composable
+                fun ZoomButtons() {
+                    TextButton(onClick = {
+                        val center = viewStart + viewSpan / 2
+                        val span = (viewSpan / 2).coerceAtLeast(min(MIN_VIEW_SECONDS, total))
+                        viewSpan = span
+                        viewStart = (center - span / 2).coerceIn(0.0, max(0.0, total - span))
+                    }) { Text("확대") }
+                    TextButton(onClick = {
+                        val center = viewStart + viewSpan / 2
+                        val span = min(viewSpan * 2, total)
+                        viewSpan = span
+                        viewStart = (center - span / 2).coerceIn(0.0, max(0.0, total - span))
+                    }) { Text("축소") }
+                    TextButton(onClick = {
+                        viewStart = 0.0
+                        viewSpan = total
+                    }) { Text("전체") }
+                }
+
+                @Composable
+                fun PlayControls() {
+                    OutlinedButton(onClick = { seekPlayer(playhead - 5) }) { Text("-5초") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = ::togglePlay) {
+                        if (playing) Text("❚❚") else Icon(Icons.Filled.PlayArrow, contentDescription = "재생")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedButton(onClick = { seekPlayer(playhead + 5) }) { Text("+5초") }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "${formatTrimTime(playhead)} / ${formatTrimTime(total)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+            Column(Modifier.fillMaxSize()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { if (busy == null) close() }) {
                         Icon(Icons.Filled.Close, contentDescription = "닫기")
                     }
                     Column(Modifier.weight(1f)) {
-                        Text("잘라내기", style = MaterialTheme.typography.titleMedium)
+                        Text("편집", style = MaterialTheme.typography.titleMedium)
                         Text(
                             track.title,
                             style = MaterialTheme.typography.bodySmall,
@@ -324,6 +419,11 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
                         )
                     }
                     TextButton(onClick = ::undoLast, enabled = undo.isNotEmpty() && busy == null) { Text("되돌리기") }
+                    if (landscape && src != null) {
+                        Row(Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SaveButtons(Modifier)
+                        }
+                    }
                 }
 
                 when {
@@ -359,55 +459,38 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
                                 viewSpan = span.coerceIn(min(MIN_VIEW_SECONDS, total), total)
                                 viewStart = start.coerceIn(0.0, max(0.0, total - viewSpan))
                             },
-                            modifier = Modifier.fillMaxWidth().height(180.dp).padding(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth().height(waveHeight).padding(horizontal = 8.dp),
                         )
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "${formatTrimTime(viewStart)} ~ ${formatTrimTime(viewStart + viewSpan)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = {
-                                val center = viewStart + viewSpan / 2
-                                val span = (viewSpan / 2).coerceAtLeast(min(MIN_VIEW_SECONDS, total))
-                                viewSpan = span
-                                viewStart = (center - span / 2).coerceIn(0.0, max(0.0, total - span))
-                            }) { Text("확대") }
-                            TextButton(onClick = {
-                                val center = viewStart + viewSpan / 2
-                                val span = min(viewSpan * 2, total)
-                                viewSpan = span
-                                viewStart = (center - span / 2).coerceIn(0.0, max(0.0, total - span))
-                            }) { Text("축소") }
-                            TextButton(onClick = {
-                                viewStart = 0.0
-                                viewSpan = total
-                            }) { Text("전체") }
+                        val rangeLabel = "${formatTrimTime(viewStart)} ~ ${formatTrimTime(viewStart + viewSpan)}"
+                        if (landscape) {
+                            // 가로: 재생과 확대를 한 줄에 둔다.
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                PlayControls()
+                                Spacer(Modifier.weight(1f))
+                                Text(rangeLabel, style = MaterialTheme.typography.labelSmall)
+                                ZoomButtons()
+                            }
+                        } else {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(rangeLabel, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                                ZoomButtons()
+                            }
+                            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                PlayControls()
+                            }
                         }
 
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedButton(onClick = { seekPlayer(playhead - 5) }) { Text("-5초") }
-                                Spacer(Modifier.width(8.dp))
-                                Button(onClick = ::togglePlay) {
-                                    if (playing) Text("❚❚") else Icon(Icons.Filled.PlayArrow, contentDescription = "재생")
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                OutlinedButton(onClick = { seekPlayer(playhead + 5) }) { Text("+5초") }
-                                Spacer(Modifier.weight(1f))
-                                Text(
-                                    "${formatTrimTime(playhead)} / ${formatTrimTime(total)}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            }
-
+                            Spacer(Modifier.height(0.dp))
                             Text(
                                 "파형을 끌어 구간을 고르거나, 들으면서 '지금 위치'로 시작·끝을 찍으세요.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -453,26 +536,33 @@ fun TrimScreen(track: Track, viewModel: MainViewModel, onDismiss: () -> Unit) {
                                     modifier = Modifier.weight(1f),
                                 ) { Text("선택만 남기기") }
                             }
+                            // 곡 전체 볼륨: 데스크톱 볼륨 조절처럼 dB 단위로 키우거나 줄인다.
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("볼륨", Modifier.width(36.dp))
+                                Text(
+                                    if (gainDb > 0) "+%.0f dB".format(gainDb) else "%.0f dB".format(gainDb),
+                                    Modifier.width(88.dp),
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                TextButton(onClick = { gainDb = (gainDb - 1).coerceAtLeast(-MAX_GAIN_DB) }) { Text("-1dB") }
+                                TextButton(onClick = { gainDb = (gainDb + 1).coerceAtMost(MAX_GAIN_DB) }) { Text("+1dB") }
+                                Spacer(Modifier.weight(1f))
+                                OutlinedButton(onClick = { gainDb = 0.0 }, enabled = gainDb != 0.0) { Text("원래대로") }
+                            }
                             Spacer(Modifier.height(8.dp))
                         }
 
-                        Row(
-                            Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            OutlinedButton(
-                                onClick = ::saveNew,
-                                enabled = removed.isNotEmpty() && busy == null,
-                                modifier = Modifier.weight(1f),
-                            ) { Text("새 파일로 저장") }
-                            Button(
-                                onClick = { confirmOverwrite = true },
-                                enabled = removed.isNotEmpty() && busy == null && src.canOverwrite,
-                                modifier = Modifier.weight(1f),
-                            ) { Text("원본에 저장") }
+                        if (!landscape) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                SaveButtons(Modifier.weight(1f))
+                            }
                         }
                     }
                 }
+            }
             }
 
             busy?.let { message ->

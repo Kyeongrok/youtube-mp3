@@ -176,7 +176,7 @@ class MainActivity : ComponentActivity() {
             AppTheme(dark, colorTheme) {
                 Box(Modifier.fillMaxSize()) {
                     MainScreen(viewModel)
-                    // 잘라내기 편집은 어느 탭에서 열든 화면 전체를 덮는다.
+                    // 편집 화면은 어느 탭에서 열든 화면 전체를 덮는다.
                     trimming?.let { track -> TrimScreen(track, viewModel, onDismiss = viewModel::closeTrim) }
                 }
             }
@@ -613,6 +613,7 @@ private fun LibraryTab(viewModel: MainViewModel) {
     var menuFor by remember { mutableStateOf<Long?>(null) }
     var adding by remember { mutableStateOf<Track?>(null) }
     val deleteFromDevice = rememberTrackDeleter(viewModel)
+    val renameTrack = rememberTrackRenamer(viewModel)
     LaunchedEffect(Unit) {
         viewModel.refreshTracks()
         viewModel.refreshDeviceTracks()
@@ -681,9 +682,10 @@ private fun LibraryTab(viewModel: MainViewModel) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Column(Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 4.dp)) {
                         Text(track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        if (source == LibrarySource.Recordings) {
+                        if (source != LibrarySource.Downloaded) {
+                            // 녹음이 엉뚱한 쪽에 있으면 폴더를 보고 찾을 수 있게 폴더도 보인다.
                             Text(
-                                recordingInfo(track),
+                                if (source == LibrarySource.Recordings) "${recordingInfo(track)} · ${track.folder}" else track.folder,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -703,13 +705,37 @@ private fun LibraryTab(viewModel: MainViewModel) {
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("잘라내기") },
+                                text = { Text("이름 바꾸기") },
                                 leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                onClick = {
+                                    menuFor = null
+                                    renameTrack(track)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("편집") },
+                                leadingIcon = { Icon(AppIcons.Cut, contentDescription = null) },
                                 onClick = {
                                     menuFor = null
                                     viewModel.openTrim(track)
                                 },
                             )
+                            if (source != LibrarySource.Downloaded && track.folder.isNotEmpty()) {
+                                val toRecording = source == LibrarySource.Device
+                                DropdownMenuItem(
+                                    text = { Text(if (toRecording) "이 폴더는 녹음" else "이 폴더는 음악") },
+                                    leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                                    onClick = {
+                                        menuFor = null
+                                        viewModel.setFolderKind(track, toRecording)
+                                        Toast.makeText(
+                                            context,
+                                            "${track.folder} 폴더를 ${if (toRecording) "녹음" else "음악"}으로 옮겼습니다.",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("삭제") },
                                 leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },

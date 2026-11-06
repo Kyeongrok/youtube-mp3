@@ -26,6 +26,8 @@ data class Track(
     /** 음성 녹음·통화 녹음처럼 노래가 아닌 소리. 기기 음악 목록에서 따로 모아 보여 준다. */
     val isRecording: Boolean = false,
     val durationMs: Long = 0,
+    /** 기기 안의 폴더(예: Recordings/Voice Recorder/). 녹음·음악 구분을 폴더 단위로 바꿀 때 쓴다. */
+    val folder: String = "",
 )
 
 /** 받은 MP3를 공용 음악 폴더(Music/YoutubeMp3)에 두고 목록을 읽는다. */
@@ -70,12 +72,31 @@ object Library {
                 val id = cursor.getLong(0)
                 tracks += Track(
                     id = id,
-                    title = cursor.getString(1).removeSuffix(".mp3"),
+                    title = cursor.getString(1).substringBeforeLast('.'),
                     uri = ContentUris.withAppendedId(COLLECTION, id),
                 )
             }
         }
         return tracks
+    }
+
+    private const val PREFS = "library"
+    private const val KEY_RECORDING_FOLDERS = "recordingFolders"
+    private const val KEY_MUSIC_FOLDERS = "musicFolders"
+
+    /** 이 폴더의 파일을 앞으로 녹음(또는 음악)으로 보여 준다. 자동 구분이 틀렸을 때 쓴다. */
+    fun setFolderKind(context: Context, folder: String, recording: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val recordings = prefs.getStringSet(KEY_RECORDING_FOLDERS, emptySet()).orEmpty().toMutableSet()
+        val music = prefs.getStringSet(KEY_MUSIC_FOLDERS, emptySet()).orEmpty().toMutableSet()
+        if (recording) {
+            recordings += folder
+            music -= folder
+        } else {
+            music += folder
+            recordings -= folder
+        }
+        prefs.edit().putStringSet(KEY_RECORDING_FOLDERS, recordings).putStringSet(KEY_MUSIC_FOLDERS, music).apply()
     }
 
     /** 녹음 앱들이 흔히 쓰는 폴더 이름. 시스템이 녹음 표시를 안 해 준 파일도 이걸로 가려낸다. */
@@ -90,6 +111,9 @@ object Library {
      * 권한이 없으면 이 앱이 저장한 곡만 나온다.
      */
     fun listDevice(context: Context): List<Track> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val recordingFolders = prefs.getStringSet(KEY_RECORDING_FOLDERS, emptySet()).orEmpty()
+        val musicFolders = prefs.getStringSet(KEY_MUSIC_FOLDERS, emptySet()).orEmpty()
         val hasRecordingFlag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         val projection = buildList {
             add(MediaStore.MediaColumns._ID)
@@ -109,7 +133,7 @@ object Library {
             listOf(MediaStore.Audio.Media.IS_RINGTONE, MediaStore.Audio.Media.IS_NOTIFICATION, MediaStore.Audio.Media.IS_ALARM)
                 .joinToString(" AND ") { "($it IS NULL OR $it = 0)" },
             null,
-            "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE",
+            "${MediaStore.MediaColumns.DISPLAY_NAME} COLLATE NOCASE",
         )?.use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(0)
@@ -119,12 +143,19 @@ object Library {
                 val flagged = hasRecordingFlag && cursor.getInt(7) != 0
                 tracks += Track(
                     id,
-                    cursor.getString(1)?.takeIf { it.isNotBlank() }
-                        ?: cursor.getString(2).orEmpty().substringBeforeLast('.'),
+                    // 이름 바꾸기가 고치는 건 파일 이름이므로 파일 이름을 보여 준다. 없으면 태그 제목.
+                    cursor.getString(2)?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
+                        ?: cursor.getString(1).orEmpty(),
                     ContentUris.withAppendedId(COLLECTION, id),
                     cursor.getLong(3),
-                    isRecording = flagged || notMusic || RECORDING_FOLDERS.containsMatchIn(path),
+                    // 사용자가 폴더를 직접 정했으면 그걸 따른다.
+                    isRecording = when (path) {
+                        in recordingFolders -> true
+                        in musicFolders -> false
+                        else -> flagged || notMusic || RECORDING_FOLDERS.containsMatchIn(path)
+                    },
                     durationMs = cursor.getLong(6),
+                    folder = path,
                 )
             }
         }
@@ -182,6 +213,34 @@ object Library {
             e.userAction.actionIntent.intentSender
         }
     }
+
+    /**
+     * 파일 이름을 바꾼다. 확장자는 그대로 둔다.
+     * 다른 앱이 만든 파일이면 SecurityException이 나므로, 시스템 허락을 받은 뒤 다시 부른다.
+     */
+    fun rename(context: Context, track: Track, newTitle: String) {
+        val resolver = context.contentResolver
+        val current = resolver.query(track.uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            ?: error("파일을 찾을 수 없습니다.")
+        val extension = current.substringAfterLast('.', "")
+        // 확장자까지 적어도 두 번 붙지 않게 뗀다.
+        val safe = newTitle.trim().removeSuffix(".$extension").replace(Regex("[\\\\/:*?\"<>|]"), "_").trim()
+        if (safe.isEmpty()) error("이름이 비어 있습니다.")
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, if (extension.isEmpty()) safe else "$safe.$extension")
+            put(MediaStore.MediaColumns.TITLE, safe)
+        }
+        if (resolver.update(track.uri, values, null, null) == 0) error("이름을 바꾸지 못했습니다.")
+    }
+
+    /** 다른 앱이 만든 파일을 고쳐도 되는지 묻는 시스템 창. Android 10은 예외에 담겨 오므로 null이다. */
+    fun writeRequest(context: Context, track: Track): IntentSender? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            MediaStore.createWriteRequest(context.contentResolver, listOf(track.uri)).intentSender
+        } else {
+            null
+        }
 
     fun delete(context: Context, track: Track) {
         context.contentResolver.delete(track.uri, null, null)

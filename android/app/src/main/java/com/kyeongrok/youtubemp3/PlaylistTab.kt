@@ -2,6 +2,7 @@ package com.kyeongrok.youtubemp3
 
 import android.Manifest
 import android.app.Activity
+import android.app.RecoverableSecurityException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -189,6 +190,7 @@ private fun RecentTracks(deviceTracks: List<Track>, playlists: List<Playlist>, v
     // 녹음은 내 음악 탭의 녹음에서 따로 보므로 여기엔 노래만 둔다.
     val tracks = deviceTracks.filter { !it.isRecording }.sortedByDescending { it.dateAdded }.take(RECENT_LIMIT)
     var menuFor by remember { mutableStateOf<Long?>(null) }
+    val renameTrack = rememberTrackRenamer(viewModel)
     var adding by remember { mutableStateOf<Track?>(null) }
 
     Column(Modifier.fillMaxSize()) {
@@ -230,8 +232,16 @@ private fun RecentTracks(deviceTracks: List<Track>, playlists: List<Playlist>, v
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("잘라내기") },
+                            text = { Text("이름 바꾸기") },
                             leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                            onClick = {
+                                menuFor = null
+                                renameTrack(track)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("편집") },
+                            leadingIcon = { Icon(AppIcons.Cut, contentDescription = null) },
                             onClick = {
                                 menuFor = null
                                 viewModel.openTrim(track)
@@ -354,6 +364,7 @@ private fun PlaylistDetail(
     LaunchedEffect(tracks) { if (draggedId == null) order = tracks }
     var dragOffset by remember { mutableStateOf(0f) }
     var menuFor by remember { mutableStateOf<Long?>(null) }
+    val renameTrack = rememberTrackRenamer(viewModel)
     val listState = rememberLazyListState()
 
     fun dragBy(delta: Float) {
@@ -467,8 +478,16 @@ private fun PlaylistDetail(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("잘라내기") },
+                                    text = { Text("이름 바꾸기") },
                                     leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                    onClick = {
+                                        menuFor = null
+                                        renameTrack(track)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("편집") },
+                                    leadingIcon = { Icon(AppIcons.Cut, contentDescription = null) },
                                     onClick = {
                                         menuFor = null
                                         viewModel.openTrim(track)
@@ -628,4 +647,66 @@ fun rememberTrackDeleter(viewModel: MainViewModel): (Track) -> Unit {
     }
 
     return { track -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) delete(track) else confirming = track }
+}
+
+/**
+ * 곡 이름(파일 이름)을 바꾸는 창을 띄우는 함수를 돌려준다.
+ * 다른 앱이 만든 파일이면 시스템에 고쳐도 되는지 물은 뒤 다시 바꾼다.
+ */
+@Composable
+fun rememberTrackRenamer(viewModel: MainViewModel): (Track) -> Unit {
+    val context = LocalContext.current
+    var editing by remember { mutableStateOf<Track?>(null) }
+    var pending by remember { mutableStateOf<Pair<Track, String>?>(null) }
+
+    fun done() {
+        viewModel.refreshTracks()
+        viewModel.refreshDeviceTracks()
+        Toast.makeText(context, "이름을 바꿨습니다.", Toast.LENGTH_SHORT).show()
+    }
+
+    val writeRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        val (track, name) = pending ?: return@rememberLauncherForActivityResult
+        pending = null
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        try {
+            Library.rename(context, track, name)
+            done()
+        } catch (e: Exception) {
+            Toast.makeText(context, "이름을 바꾸지 못했습니다: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun rename(track: Track, name: String) {
+        try {
+            Library.rename(context, track, name)
+            done()
+        } catch (e: SecurityException) {
+            val sender = Library.writeRequest(context, track)
+                ?: (e as? RecoverableSecurityException)?.userAction?.actionIntent?.intentSender
+            if (sender == null) {
+                Toast.makeText(context, "이 파일은 이름을 바꿀 수 없습니다.", Toast.LENGTH_LONG).show()
+            } else {
+                pending = track to name
+                writeRequest.launch(IntentSenderRequest.Builder(sender).build())
+            }
+        } catch (e: Exception) {
+            Toast.makeText(context, "이름을 바꾸지 못했습니다: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    editing?.let { track ->
+        PlaylistNameDialog(
+            title = "이름 바꾸기",
+            confirmLabel = "바꾸기",
+            initial = track.title,
+            onDismiss = { editing = null },
+            onConfirm = { name ->
+                editing = null
+                if (name != track.title) rename(track, name)
+            },
+        )
+    }
+
+    return { track -> editing = track }
 }

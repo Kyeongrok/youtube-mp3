@@ -50,7 +50,7 @@ object Engine {
         }
     }
 
-    /** 함께 깔린 FFmpeg를 다른 곳(잘라내기 편집)에서 쓰기 전에 풀려 있기를 기다린다. yt-dlp 업데이트는 기다리지 않는다. */
+    /** 함께 깔린 FFmpeg를 다른 곳(편집 화면)에서 쓰기 전에 풀려 있기를 기다린다. yt-dlp 업데이트는 기다리지 않는다. */
     suspend fun awaitFFmpeg() = ffmpegReady.await()
 
     private fun updateIfStale(context: Context) {

@@ -212,8 +212,15 @@ object AudioTrimmer {
     /**
      * 지운 구간을 뺀 파일을 캐시에 만들어 돌려준다.
      * [extension]이 null이면 원본과 같은 형식으로, 아니면 그 형식으로 만든다.
+     * [gainDb]만큼 볼륨을 키우거나 줄인다(데스크톱 볼륨 조절과 같은 FFmpeg volume 필터).
      */
-    suspend fun render(context: Context, source: Source, removed: List<TimeRange>, extension: String? = null): File =
+    suspend fun render(
+        context: Context,
+        source: Source,
+        removed: List<TimeRange>,
+        extension: String? = null,
+        gainDb: Double = 0.0,
+    ): File =
         withContext(Dispatchers.IO) {
             val ext = extension ?: source.extension
             val encoder = ENCODERS[ext] ?: error("$ext 형식으로는 저장할 수 없습니다.")
@@ -229,7 +236,8 @@ object AudioTrimmer {
                     append("[s$i]atrim=start=%.4f:end=%.4f,asetpts=PTS-STARTPTS[k$i];".format(java.util.Locale.ROOT, range.start, range.end))
                 }
                 kept.indices.forEach { append("[k$it]") }
-                append("concat=n=${kept.size}:v=0:a=1[out]")
+                append("concat=n=${kept.size}:v=0:a=1[cat];")
+                append("[cat]volume=%.1fdB[out]".format(java.util.Locale.ROOT, gainDb))
             }
 
             val output = File(source.file.parentFile, "edited.$ext")

@@ -178,7 +178,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val mutableTrimming = MutableStateFlow<Track?>(null)
-    /** 잘라내기 편집 화면에 열린 곡. null이면 닫혀 있다. */
+    /** 편집 화면에 열린 곡. null이면 닫혀 있다. */
     val trimming = mutableTrimming.asStateFlow()
 
     fun openTrim(track: Track) {
@@ -195,6 +195,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshDeviceTracks() {
         mutableDeviceTracks.value = Library.listDevice(getApplication())
+    }
+
+    /** 이 곡이 있는 폴더 전체를 녹음(또는 음악)으로 옮겨 보여 준다. */
+    fun setFolderKind(track: Track, recording: Boolean) {
+        Library.setFolderKind(getApplication(), track.folder, recording)
+        refreshDeviceTracks()
     }
 
     private val mutableScanning = MutableStateFlow(false)

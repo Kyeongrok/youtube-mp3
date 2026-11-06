@@ -1,6 +1,13 @@
 package com.kyeongrok.youtubemp3
 
 import android.speech.tts.TextToSpeech
+import android.content.Context
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -116,21 +123,145 @@ private fun TracingTopBar(title: String, onBack: () -> Unit) {
     )
 }
 
+/** 아이가 쓰고 싶은 낱말. 기기에 저장하고, 처음에는 예시 낱말을 넣어 둔다. */
+private object HangulWords {
+    private const val PREFS = "hangulWords"
+    private const val KEY = "words"
+    private const val DEFAULT = "똥\n응가\n쉬\n방구\n고양이"
+    const val MAX_LENGTH = 8
+
+    fun load(context: Context): List<String> =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, DEFAULT).orEmpty()
+            .split("\n").filter { it.isNotBlank() }
+
+    fun save(context: Context, words: List<String>) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, words.joinToString("\n")).apply()
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HangulScreen() = TracingScreen(
-    letters = Hangul.LETTERS,
-    hint = { "${Hangul.JAMO[it]}+ㅏ" },
-    reading = { "" },
-    spoken = { Hangul.LETTERS[it].text },
-)
+fun HangulScreen() {
+    BackgroundMusic()
+    val context = LocalContext.current
+    var words by remember { mutableStateOf(HangulWords.load(context)) }
+    var word by rememberSaveable { mutableStateOf<String?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<String?>(null) }
+    val current = word?.takeIf { it in words }
+    val letters = remember(current) { current?.map(Hangul::letter) ?: Hangul.LETTERS }
+
+    if (adding) {
+        AddWordDialog(
+            onAdd = { added ->
+                adding = false
+                if (added !in words) {
+                    words = words + added
+                    HangulWords.save(context, words)
+                }
+                word = added
+            },
+            onDismiss = { adding = false },
+        )
+    }
+    deleting?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("낱말 지우기") },
+            text = { Text("「$target」을(를) 목록에서 지울까요?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    words = words - target
+                    HangulWords.save(context, words)
+                    if (word == target) word = null
+                    deleting = null
+                }) { Text("지우기") }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } },
+        )
+    }
+
+    @Composable
+    fun Pill(text: String, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(50))
+                .background(if (selected) Color(0xFF7E57C2) else Color.White)
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (selected) Color.White else Color(0xFF37474F),
+            )
+        }
+    }
+
+    TracingScreen(
+        id = current ?: "",
+        letters = letters,
+        hint = { Hangul.jamoHint(letters[it].text[0]) },
+        reading = { if (current != null && it == letters.lastIndex) "\n「$current」 완성!" else "" },
+        spoken = { if (current != null && it == letters.lastIndex) current else letters[it].text },
+        top = {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Pill("가나다", current == null, onClick = { word = null })
+                words.forEach { w ->
+                    Pill(w, w == current, onClick = { word = w }, onLongClick = { deleting = w })
+                }
+                Pill("+ 낱말", false, onClick = { adding = true })
+            }
+        },
+    )
+}
 
 @Composable
-fun NumberScreen() = TracingScreen(
-    letters = Numbers.LETTERS,
-    hint = { Numbers.READINGS[it] },
-    reading = { " " + Numbers.READINGS[it] },
-    spoken = { Numbers.READINGS[it].replace(" · ", ", ") },
-)
+private fun AddWordDialog(onAdd: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+    val word = text.trim().replace(" ", "")
+    val valid = word.isNotEmpty() && word.length <= HangulWords.MAX_LENGTH && word.all(Hangul::isSyllable)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("낱말 넣기") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    singleLine = true,
+                    placeholder = { Text("예: 하츄핑") },
+                )
+                Text(
+                    when {
+                        word.isEmpty() -> "따라 쓸 낱말을 적어 주세요. 지울 때는 낱말을 길게 누르면 됩니다."
+                        !word.all(Hangul::isSyllable) -> "완성된 한글 글자만 쓸 수 있습니다."
+                        word.length > HangulWords.MAX_LENGTH -> "${HangulWords.MAX_LENGTH}글자까지 넣을 수 있습니다."
+                        else -> "${word.length}글자를 차례로 따라 씁니다."
+                    },
+                    fontSize = 14.sp,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onAdd(word) }, enabled = valid) { Text("넣기") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    )
+}
+
+@Composable
+fun NumberScreen() {
+    BackgroundMusic()
+    TracingScreen(
+        letters = Numbers.LETTERS,
+        hint = { Numbers.READINGS[it] },
+        reading = { " " + Numbers.READINGS[it] },
+        spoken = { Numbers.READINGS[it].replace(" · ", ", ") },
+    )
+}
 
 /** 배경음악. 화면이 보이는 동안 켜져 있을 때만 튼다. 이미 노래를 듣고 있으면 틀지 않는다. */
 @Composable
@@ -156,8 +287,10 @@ private fun TracingScreen(
     hint: (Int) -> String,
     reading: (Int) -> String,
     spoken: (Int) -> String,
+    /** 글자 목록이 바뀌면 처음 글자부터 다시 시작한다. */
+    id: String = "",
+    top: @Composable () -> Unit = {},
 ) {
-    BackgroundMusic()
     val context = LocalContext.current
     val speech = remember { arrayOfNulls<TextToSpeech>(1) }
     DisposableEffect(Unit) {
@@ -175,11 +308,11 @@ private fun TracingScreen(
         speech[0]?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "hangul")
     }
 
-    var index by rememberSaveable { mutableIntStateOf(0) }
-    val finished = remember { mutableStateListOf<Int>() }
+    var index by rememberSaveable(id) { mutableIntStateOf(0) }
+    val finished = remember(id) { mutableStateListOf<Int>() }
     val letter = letters[index]
-    var stroke by rememberSaveable { mutableIntStateOf(0) }
-    var progress by rememberSaveable { mutableFloatStateOf(0f) }
+    var stroke by rememberSaveable(id) { mutableIntStateOf(0) }
+    var progress by rememberSaveable(id) { mutableFloatStateOf(0f) }
     val done = stroke >= letter.strokes.size
 
     fun restart() {
@@ -274,17 +407,27 @@ private fun TracingScreen(
     }
 
     @Composable
-    fun Buttons() {
-        OutlinedButton(onClick = { say(spoken(index)) }) { Text("듣기") }
-        OutlinedButton(onClick = ::restart) { Text("다시") }
-        if (done && index < letters.lastIndex) {
-            Button(onClick = { move(index + 1) }) { Text("다음") }
+    fun SmallButtons(modifier: Modifier) {
+        OutlinedButton(onClick = { say(spoken(index)) }, modifier.height(56.dp)) { Text("듣기", fontSize = 18.sp) }
+        OutlinedButton(onClick = ::restart, modifier.height(56.dp)) { Text("다시", fontSize = 18.sp) }
+    }
+
+    @Composable
+    fun NextButton(modifier: Modifier) {
+        Button(
+            onClick = { move(index + 1) },
+            modifier = modifier.height(64.dp),
+            enabled = done && index < letters.lastIndex,
+        ) {
+            Text("다음 ▶", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         }
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(SeaBottom)) {
         if (maxWidth > maxHeight) {
             // 가로 화면: 글자 고르기는 왼쪽, 버튼은 오른쪽에 두어 글자 칸을 크게 쓴다.
+            Column(Modifier.fillMaxSize()) {
+            top()
             Row(Modifier.fillMaxSize()) {
                 FlowRow(
                     Modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(8.dp),
@@ -296,16 +439,19 @@ private fun TracingScreen(
                 }
                 Board(Modifier.weight(1f).fillMaxHeight())
                 Column(
-                    Modifier.width(150.dp).fillMaxHeight().padding(8.dp),
+                    Modifier.width(190.dp).fillMaxHeight().padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Status(Modifier, "\n")
-                    Buttons()
+                    SmallButtons(Modifier.fillMaxWidth())
+                    NextButton(Modifier.fillMaxWidth())
                 }
+            }
             }
         } else {
             Column(Modifier.fillMaxSize()) {
+                top()
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -313,13 +459,14 @@ private fun TracingScreen(
                     letters.indices.forEach { Chip(it) }
                 }
                 Board(Modifier.weight(1f).fillMaxWidth())
+                Status(Modifier.fillMaxWidth().padding(horizontal = 12.dp), "  ")
                 Row(
                     Modifier.fillMaxWidth().padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Status(Modifier.weight(1f), "  ")
-                    Buttons()
+                    SmallButtons(Modifier)
+                    NextButton(Modifier.weight(1f))
                 }
             }
         }

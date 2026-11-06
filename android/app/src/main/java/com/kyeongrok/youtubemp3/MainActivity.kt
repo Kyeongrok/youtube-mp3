@@ -132,7 +132,7 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 internal val ListPadding = PaddingValues(bottom = 16.dp)
 
 /** 앱 안의 화면들이다. None은 음악(YoutubeMp3) 화면이고 Home은 앱을 고르는 첫 화면이다. */
-private enum class MiniGame { Home, None, Sudoku, Shanghai, Riichi, FreeCell, Rummikub, Splendor, Saju, Hangul }
+private enum class MiniGame { Home, None, Sudoku, Shanghai, Riichi, FreeCell, Rummikub, Splendor, Saju, Hangul, Numbers }
 
 private class AppEntry(val label: String, val icon: ImageVector, val target: MiniGame)
 
@@ -145,6 +145,7 @@ private val GAME_ENTRIES = listOf(
     AppEntry("스플렌더", AppIcons.Splendor, MiniGame.Splendor),
     AppEntry("사주", AppIcons.Saju, MiniGame.Saju),
     AppEntry("한글 배우기", AppIcons.Hangul, MiniGame.Hangul),
+    AppEntry("숫자 공부", AppIcons.Numbers, MiniGame.Numbers),
 )
 
 private val APP_ENTRIES = listOf(AppEntry("음악", AppIcons.Music, MiniGame.None)) + GAME_ENTRIES
@@ -365,6 +366,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                 MiniGame.Splendor -> SplendorTopBar(viewModel, onBack = { game = MiniGame.Home })
                 MiniGame.Saju -> SajuTopBar(onBack = { game = MiniGame.Home })
                 MiniGame.Hangul -> HangulTopBar(onBack = { game = MiniGame.Home })
+                MiniGame.Numbers -> NumberTopBar(onBack = { game = MiniGame.Home })
                 MiniGame.Home -> TopAppBar(
                     title = { AppTitle() },
                     actions = {
@@ -411,6 +413,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                     MiniGame.Splendor -> SplendorScreen(viewModel)
                     MiniGame.Saju -> SajuScreen(viewModel)
                     MiniGame.Hangul -> HangulScreen()
+                    MiniGame.Numbers -> NumberScreen()
                     else -> FreeCellScreen(viewModel)
                 }
             }

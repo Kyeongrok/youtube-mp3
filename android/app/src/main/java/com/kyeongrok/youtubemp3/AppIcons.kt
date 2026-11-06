@@ -112,6 +112,23 @@ object AppIcons {
         }
     }
 
+    /** 네모 칸 안의 숫자 12. */
+    val Numbers: ImageVector = materialIcon("App.Numbers") {
+        materialPath(pathFillType = PathFillType.EvenOdd) {
+            moveTo(3f, 3f); horizontalLineToRelative(18f); verticalLineToRelative(18f); horizontalLineTo(3f); close()
+            moveTo(5f, 5f); verticalLineToRelative(14f); horizontalLineToRelative(14f); verticalLineTo(5f); close()
+        }
+        materialPath {
+            // 1
+            moveTo(7f, 8.5f); lineTo(9.5f, 7f); horizontalLineToRelative(1.5f); verticalLineToRelative(10f)
+            horizontalLineToRelative(-2f); verticalLineTo(9.4f); lineTo(7f, 10.5f); close()
+            // 2
+            moveTo(12.5f, 7f); horizontalLineToRelative(5f); verticalLineToRelative(5.5f); horizontalLineToRelative(-3f)
+            verticalLineToRelative(2.5f); horizontalLineToRelative(3f); verticalLineToRelative(2f); horizontalLineToRelative(-5f)
+            verticalLineToRelative(-5.5f); horizontalLineToRelative(3f); verticalLineTo(9f); horizontalLineToRelative(-3f); close()
+        }
+    }
+
     /** 다이아몬드가 그려진 카드. */
     val FreeCell: ImageVector = materialIcon("App.FreeCell") {
         materialPath(pathFillType = PathFillType.EvenOdd) {

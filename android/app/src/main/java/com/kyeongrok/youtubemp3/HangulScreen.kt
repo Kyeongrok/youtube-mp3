@@ -36,6 +36,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.TextButton
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -86,22 +91,73 @@ private const val TOLERANCE = 0.1f
 private const val WINDOW = 0.18f
 private const val ARROW_GAP = 0.09f
 
+@Composable
+fun HangulTopBar(onBack: () -> Unit) = TracingTopBar("한글 배우기", onBack)
+
+@Composable
+fun NumberTopBar(onBack: () -> Unit) = TracingTopBar("숫자 공부", onBack)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HangulTopBar(onBack: () -> Unit) {
+private fun TracingTopBar(title: String, onBack: () -> Unit) {
+    val context = LocalContext.current
     TopAppBar(
-        title = { Text("한글 배우기") },
+        title = { Text(title) },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
             }
         },
+        actions = {
+            TextButton(onClick = { KidsMusic.toggle(context) }) {
+                Text(if (KidsMusic.enabled) "음악 끄기" else "음악 켜기")
+            }
+        },
     )
+}
+
+@Composable
+fun HangulScreen() = TracingScreen(
+    letters = Hangul.LETTERS,
+    hint = { "${Hangul.JAMO[it]}+ㅏ" },
+    reading = { "" },
+    spoken = { Hangul.LETTERS[it].text },
+)
+
+@Composable
+fun NumberScreen() = TracingScreen(
+    letters = Numbers.LETTERS,
+    hint = { Numbers.READINGS[it] },
+    reading = { " " + Numbers.READINGS[it] },
+    spoken = { Numbers.READINGS[it].replace(" · ", ", ") },
+)
+
+/** 배경음악. 화면이 보이는 동안 켜져 있을 때만 튼다. 이미 노래를 듣고 있으면 틀지 않는다. */
+@Composable
+private fun BackgroundMusic() {
+    val context = LocalContext.current
+    val music = remember { KidsMusic() }
+    LaunchedEffect(Unit) {
+        KidsMusic.load(context)
+        withContext(Dispatchers.Default) { music.prepare() }
+    }
+    DisposableEffect(Unit) { onDispose { music.release() } }
+    val enabled = KidsMusic.enabled
+    LifecycleResumeEffect(enabled) {
+        if (enabled && !Player.state.value.isPlaying) music.play() else music.pause()
+        onPauseOrDispose { music.pause() }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HangulScreen() {
+private fun TracingScreen(
+    letters: List<HangulLetter>,
+    hint: (Int) -> String,
+    reading: (Int) -> String,
+    spoken: (Int) -> String,
+) {
+    BackgroundMusic()
     val context = LocalContext.current
     val speech = remember { arrayOfNulls<TextToSpeech>(1) }
     DisposableEffect(Unit) {
@@ -121,7 +177,7 @@ fun HangulScreen() {
 
     var index by rememberSaveable { mutableIntStateOf(0) }
     val finished = remember { mutableStateListOf<Int>() }
-    val letter = Hangul.LETTERS[index]
+    val letter = letters[index]
     var stroke by rememberSaveable { mutableIntStateOf(0) }
     var progress by rememberSaveable { mutableFloatStateOf(0f) }
     val done = stroke >= letter.strokes.size
@@ -132,12 +188,12 @@ fun HangulScreen() {
     }
 
     fun move(to: Int) {
-        index = to.coerceIn(0, Hangul.LETTERS.lastIndex)
+        index = to.coerceIn(0, letters.lastIndex)
         restart()
     }
 
     fun trace(finger: Offset) {
-        val letter = Hangul.LETTERS[index]
+        val letter = letters[index]
         if (stroke >= letter.strokes.size) return
         val current = letter.strokes[stroke]
         val reached = current.advance(finger, progress, WINDOW, TOLERANCE) ?: return
@@ -147,7 +203,7 @@ fun HangulScreen() {
             progress = 0f
             if (stroke == letter.strokes.size) {
                 if (index !in finished) finished += index
-                say(letter.text)
+                say(spoken(index))
             }
         }
     }
@@ -170,7 +226,7 @@ fun HangulScreen() {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                Hangul.LETTERS[i].text,
+                letters[i].text,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (selected) Color.White else Color(0xFF37474F),
@@ -196,7 +252,7 @@ fun HangulScreen() {
                 )
                 FilledTonalIconButton(
                     onClick = { move(index + 1) },
-                    enabled = index < Hangul.LETTERS.lastIndex,
+                    enabled = index < letters.lastIndex,
                 ) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 글자")
                 }
@@ -207,8 +263,8 @@ fun HangulScreen() {
     @Composable
     fun Status(modifier: Modifier, gap: String) {
         Text(
-            if (done) "참 잘했어요!$gap「${letter.text}」" else
-                "${Hangul.JAMO[index]}+ㅏ$gap${letter.strokes.size}획 중 ${stroke + 1}번째 획",
+            if (done) "참 잘했어요!$gap「${letter.text}」${reading(index)}" else
+                "${hint(index)}$gap${letter.strokes.size}획 중 ${stroke + 1}번째 획",
             modifier,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
@@ -219,9 +275,9 @@ fun HangulScreen() {
 
     @Composable
     fun Buttons() {
-        OutlinedButton(onClick = { say(letter.text) }) { Text("듣기") }
+        OutlinedButton(onClick = { say(spoken(index)) }) { Text("듣기") }
         OutlinedButton(onClick = ::restart) { Text("다시") }
-        if (done && index < Hangul.LETTERS.lastIndex) {
+        if (done && index < letters.lastIndex) {
             Button(onClick = { move(index + 1) }) { Text("다음") }
         }
     }
@@ -236,7 +292,7 @@ fun HangulScreen() {
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     maxItemsInEachRow = 2,
                 ) {
-                    Hangul.LETTERS.indices.forEach { Chip(it) }
+                    letters.indices.forEach { Chip(it) }
                 }
                 Board(Modifier.weight(1f).fillMaxHeight())
                 Column(
@@ -254,7 +310,7 @@ fun HangulScreen() {
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Hangul.LETTERS.indices.forEach { Chip(it) }
+                    letters.indices.forEach { Chip(it) }
                 }
                 Board(Modifier.weight(1f).fillMaxWidth())
                 Row(

@@ -197,6 +197,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mutableDeviceTracks.value = Library.listDevice(getApplication())
     }
 
+    private val mutableScanning = MutableStateFlow(false)
+    val scanning = mutableScanning.asStateFlow()
+
+    /** 저장소를 훑어 빠진 파일을 등록하고 목록을 다시 읽는다. 끝나면 새로 찾은 개수를 알려 준다. */
+    fun scanDevice(onDone: (Int) -> Unit) {
+        if (mutableScanning.value) return
+        mutableScanning.value = true
+        viewModelScope.launch {
+            val found = try {
+                Library.scanStorage(getApplication())
+            } catch (e: Exception) {
+                0
+            }
+            refreshTracks()
+            refreshDeviceTracks()
+            mutableScanning.value = false
+            onDone(found)
+        }
+    }
+
     fun delete(track: Track) {
         Player.stopIfPlaying(track)
         Library.delete(getApplication(), track)

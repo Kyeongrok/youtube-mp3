@@ -121,6 +121,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import android.widget.Toast
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.CircularProgressIndicator
 
 // 목록 끝 항목이 화면 아래에 붙지 않도록 조금 띄운다.
 internal val ListPadding = PaddingValues(bottom = 16.dp)
@@ -591,71 +594,157 @@ private fun DownloadsTab(downloads: List<DownloadItem>) {
     }
 }
 
+private enum class LibrarySource(val label: String) {
+    Downloaded("받은 음악"),
+    Device("기기 음악"),
+    Recordings("녹음"),
+}
+
+/** 이 앱이 받은 곡, 기기의 다른 음악, 녹음을 나눠 보여 준다. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LibraryTab(viewModel: MainViewModel) {
-    val tracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val downloaded by viewModel.tracks.collectAsStateWithLifecycle()
+    val device by viewModel.deviceTracks.collectAsStateWithLifecycle()
+    val scanning by viewModel.scanning.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var source by rememberSaveable { mutableStateOf(LibrarySource.Downloaded) }
     var menuFor by remember { mutableStateOf<Long?>(null) }
     var adding by remember { mutableStateOf<Track?>(null) }
-    LaunchedEffect(Unit) { viewModel.refreshTracks() }
-
-    if (tracks.isEmpty()) {
-        Text("받은 음악이 없습니다. 파일은 Music/YoutubeMp3에 저장됩니다.", Modifier.padding(16.dp))
+    val deleteFromDevice = rememberTrackDeleter(viewModel)
+    LaunchedEffect(Unit) {
+        viewModel.refreshTracks()
+        viewModel.refreshDeviceTracks()
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
-        itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-            // 누른 곡부터 목록 끝까지 이어서 튼다.
+
+    val music = remember(device) { device.filter { !it.isRecording } }
+    // 녹음은 제목보다 언제 녹음했는지로 찾게 되므로 최신순으로 둔다.
+    val recordings = remember(device) { device.filter { it.isRecording }.sortedByDescending { it.dateAdded } }
+    val tracks = when (source) {
+        LibrarySource.Downloaded -> downloaded
+        LibrarySource.Device -> music
+        LibrarySource.Recordings -> recordings
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        if (source != LibrarySource.Downloaded) AudioPermissionBar(viewModel)
+        Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(
-                Modifier.fillMaxWidth().clickable { Player.play(context, tracks, index) }.padding(start = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                Text(
-                    track.title,
-                    Modifier.weight(1f).padding(horizontal = 8.dp),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Box {
-                    IconButton(onClick = { menuFor = track.id }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "더 보기")
+                LibrarySource.entries.forEach { item ->
+                    val count = when (item) {
+                        LibrarySource.Downloaded -> downloaded.size
+                        LibrarySource.Device -> music.size
+                        LibrarySource.Recordings -> recordings.size
                     }
-                    DropdownMenu(menuFor == track.id, { menuFor = null }) {
-                        DropdownMenuItem(
-                            text = { Text("재생목록에 추가") },
-                            leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                            onClick = {
-                                menuFor = null
-                                adding = track
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("잘라내기") },
-                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                            onClick = {
-                                menuFor = null
-                                viewModel.openTrim(track)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("삭제") },
-                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                            onClick = {
-                                menuFor = null
-                                viewModel.delete(track)
-                            },
-                        )
-                    }
+                    FilterChip(
+                        selected = source == item,
+                        onClick = { source = item },
+                        label = { Text("${item.label} $count") },
+                    )
                 }
             }
-            HorizontalDivider()
+            if (scanning) {
+                CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.dp)
+            } else {
+                IconButton(onClick = {
+                    viewModel.scanDevice { found ->
+                        val message = if (found > 0) "새 파일 ${found}개를 찾았습니다." else "새로 찾은 파일이 없습니다."
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "기기 스캔")
+                }
+            }
+        }
+
+        if (tracks.isEmpty()) {
+            Text(
+                when (source) {
+                    LibrarySource.Downloaded -> "받은 음악이 없습니다. 파일은 Music/YoutubeMp3에 저장됩니다."
+                    LibrarySource.Device -> "기기에서 음악을 찾지 못했습니다. 오른쪽 위 새로고침으로 저장소를 다시 훑어보세요."
+                    LibrarySource.Recordings -> "녹음 파일이 없습니다. 오른쪽 위 새로고침으로 저장소를 다시 훑어보세요."
+                },
+                Modifier.padding(16.dp),
+            )
+        }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = ListPadding) {
+            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+                // 누른 곡부터 목록 끝까지 이어서 튼다.
+                Row(
+                    Modifier.fillMaxWidth().clickable { Player.play(context, tracks, index) }.padding(start = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Column(Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                        Text(track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (source == LibrarySource.Recordings) {
+                            Text(
+                                recordingInfo(track),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { menuFor = track.id }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "더 보기")
+                        }
+                        DropdownMenu(menuFor == track.id, { menuFor = null }) {
+                            DropdownMenuItem(
+                                text = { Text("재생목록에 추가") },
+                                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                                onClick = {
+                                    menuFor = null
+                                    adding = track
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("잘라내기") },
+                                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                onClick = {
+                                    menuFor = null
+                                    viewModel.openTrim(track)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("삭제") },
+                                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                                onClick = {
+                                    menuFor = null
+                                    // 다른 앱이 만든 파일은 시스템에 허락을 받아야 지울 수 있다.
+                                    if (source == LibrarySource.Downloaded) viewModel.delete(track) else deleteFromDevice(track)
+                                },
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider()
+            }
         }
     }
 
     adding?.let { track ->
         AddToPlaylistDialog(track, playlists, viewModel, onDone = { adding = null })
     }
+}
+
+private val RecordingDateFormat = java.text.SimpleDateFormat("yyyy.MM.dd HH:mm", java.util.Locale.KOREA)
+
+/** 녹음 목록 아래 줄: 녹음한 때와 길이(예: 2026.11.06 14:20 · 3:12). */
+private fun recordingInfo(track: Track): String {
+    val date = RecordingDateFormat.format(java.util.Date(track.dateAdded * 1000))
+    if (track.durationMs <= 0) return date
+    val total = track.durationMs / 1000
+    val length = if (total >= 3600) {
+        "%d:%02d:%02d".format(total / 3600, total % 3600 / 60, total % 60)
+    } else {
+        "%d:%02d".format(total / 60, total % 60)
+    }
+    return "$date · $length"
 }
 
 /** 재생 중인 곡과 그 뒤로 나올 곡들. 하단 재생바의 제목을 누르면 열린다. */

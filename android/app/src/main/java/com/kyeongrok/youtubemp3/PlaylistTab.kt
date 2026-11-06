@@ -86,11 +86,9 @@ private const val RECENT_LIMIT = 50
 private fun hasAudioPermission(context: Context) =
     context.checkSelfPermission(AUDIO_PERMISSION) == PackageManager.PERMISSION_GRANTED
 
+/** 기기 음악을 읽을 권한이 없으면 허용 버튼을 보여 주고, 화면에 돌아올 때마다(설정에서 켜고 온 경우 포함) 목록을 다시 읽는다. */
 @Composable
-fun PlaylistTab(viewModel: MainViewModel) {
-    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
-    val deviceTracks by viewModel.deviceTracks.collectAsStateWithLifecycle()
-    var openId by rememberSaveable { mutableStateOf<Long?>(null) }
+fun AudioPermissionBar(viewModel: MainViewModel) {
     val context = LocalContext.current
     var canRead by remember { mutableStateOf(hasAudioPermission(context)) }
     var denied by remember { mutableStateOf(false) }
@@ -100,34 +98,41 @@ fun PlaylistTab(viewModel: MainViewModel) {
         if (granted) viewModel.refreshDeviceTracks()
     }
 
-    // 탭에 들어올 때와, 설정 화면에서 권한을 켜고 돌아올 때 다시 읽는다.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         canRead = hasAudioPermission(context)
         viewModel.refreshDeviceTracks()
     }
 
+    if (!canRead) {
+        TextButton(
+            onClick = {
+                if (denied) {
+                    // 거부가 반복되면 시스템이 요청 창을 띄우지 않으므로 설정으로 보낸다.
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", context.packageName, null),
+                        ),
+                    )
+                } else {
+                    permission.launch(AUDIO_PERMISSION)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (denied) "설정에서 음악 접근 허용하기" else "기기의 모든 음악·녹음을 쓰려면 접근 허용하기") }
+    }
+}
+
+@Composable
+fun PlaylistTab(viewModel: MainViewModel) {
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val deviceTracks by viewModel.deviceTracks.collectAsStateWithLifecycle()
+    var openId by rememberSaveable { mutableStateOf<Long?>(null) }
     val open = playlists.find { it.id == openId }
     BackHandler(openId != null) { openId = null }
 
     Column(Modifier.fillMaxSize()) {
-        if (!canRead) {
-            TextButton(
-                onClick = {
-                    if (denied) {
-                        // 거부가 반복되면 시스템이 요청 창을 띄우지 않으므로 설정으로 보낸다.
-                        context.startActivity(
-                            Intent(
-                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.fromParts("package", context.packageName, null),
-                            ),
-                        )
-                    } else {
-                        permission.launch(AUDIO_PERMISSION)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (denied) "설정에서 음악 접근 허용하기" else "기기의 모든 음악을 쓰려면 접근 허용하기") }
-        }
+        AudioPermissionBar(viewModel)
         when {
             openId == RECENT_ID -> RecentTracks(deviceTracks, playlists, viewModel, onBack = { openId = null })
             open == null -> PlaylistList(playlists, viewModel, onOpen = { openId = it })
@@ -181,7 +186,8 @@ private fun PlaylistList(playlists: List<Playlist>, viewModel: MainViewModel, on
 @Composable
 private fun RecentTracks(deviceTracks: List<Track>, playlists: List<Playlist>, viewModel: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
-    val tracks = deviceTracks.sortedByDescending { it.dateAdded }.take(RECENT_LIMIT)
+    // 녹음은 내 음악 탭의 녹음에서 따로 보므로 여기엔 노래만 둔다.
+    val tracks = deviceTracks.filter { !it.isRecording }.sortedByDescending { it.dateAdded }.take(RECENT_LIMIT)
     var menuFor by remember { mutableStateOf<Long?>(null) }
     var adding by remember { mutableStateOf<Track?>(null) }
 

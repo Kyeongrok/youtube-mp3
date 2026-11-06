@@ -112,6 +112,29 @@ object AppIcons {
         }
     }
 
+    /** 대문자 A와 작은 a. */
+    val Alphabet: ImageVector = materialIcon("App.Alphabet") {
+        materialPath(pathFillType = PathFillType.EvenOdd) {
+            moveTo(2f, 20f); lineTo(7.5f, 4f); horizontalLineToRelative(2.2f); lineTo(15.2f, 20f)
+            horizontalLineToRelative(-2.3f); lineToRelative(-1.3f, -4f); horizontalLineToRelative(-5.2f)
+            lineToRelative(-1.3f, 4f); close()
+            moveTo(7f, 14f); horizontalLineToRelative(4f); lineTo(9f, 7.8f); close()
+        }
+        materialPath(pathFillType = PathFillType.EvenOdd) {
+            moveTo(18.5f, 13f)
+            arcToRelative(3f, 3f, 0f, true, true, 0f, 6f)
+            arcToRelative(3f, 3f, 0f, true, true, 0f, -6f)
+            close()
+            moveTo(18.5f, 14.6f)
+            arcToRelative(1.4f, 1.4f, 0f, true, false, 0f, 2.8f)
+            arcToRelative(1.4f, 1.4f, 0f, true, false, 0f, -2.8f)
+            close()
+        }
+        materialPath {
+            moveTo(20.8f, 13f); horizontalLineToRelative(1.5f); verticalLineToRelative(7f); horizontalLineToRelative(-1.5f); close()
+        }
+    }
+
     /** 네모 칸 안의 숫자 12. */
     val Numbers: ImageVector = materialIcon("App.Numbers") {
         materialPath(pathFillType = PathFillType.EvenOdd) {

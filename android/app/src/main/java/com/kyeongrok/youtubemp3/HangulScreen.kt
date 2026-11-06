@@ -104,6 +104,9 @@ fun HangulTopBar(onBack: () -> Unit) = TracingTopBar("한글 배우기", onBack)
 @Composable
 fun NumberTopBar(onBack: () -> Unit) = TracingTopBar("숫자 공부", onBack)
 
+@Composable
+fun AlphabetTopBar(onBack: () -> Unit) = TracingTopBar("알파벳", onBack)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TracingTopBar(title: String, onBack: () -> Unit) {
@@ -139,7 +142,51 @@ private object HangulWords {
     }
 }
 
+/** 위쪽 고르기 줄의 알약 모양 버튼. 길게 누르기를 받을 수 있다. */
 @OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Pill(text: String, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) Color(0xFF7E57C2) else Color.White)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (selected) Color.White else Color(0xFF37474F),
+        )
+    }
+}
+
+@Composable
+fun AlphabetScreen() {
+    BackgroundMusic()
+    var lower by rememberSaveable { mutableStateOf(false) }
+    val letters = if (lower) Alphabet.LOWERCASE else Alphabet.UPPERCASE
+    TracingScreen(
+        id = if (lower) "lower" else "upper",
+        letters = letters,
+        hint = { "${Alphabet.UPPERCASE[it].text}${Alphabet.LOWERCASE[it].text} · ${Alphabet.NAMES[it]}" },
+        reading = { " " + Alphabet.NAMES[it] },
+        // 대문자 한 글자를 읽히면 알파벳 이름으로 읽어 준다.
+        spoken = { Alphabet.UPPERCASE[it].text },
+        locale = Locale.US,
+        top = {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Pill("대문자 ABC", !lower, onClick = { lower = false })
+                Pill("소문자 abc", lower, onClick = { lower = true })
+            }
+        },
+    )
+}
+
 @Composable
 fun HangulScreen() {
     BackgroundMusic()
@@ -179,24 +226,6 @@ fun HangulScreen() {
             },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("취소") } },
         )
-    }
-
-    @Composable
-    fun Pill(text: String, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
-        Box(
-            Modifier
-                .clip(RoundedCornerShape(50))
-                .background(if (selected) Color(0xFF7E57C2) else Color.White)
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            Text(
-                text,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (selected) Color.White else Color(0xFF37474F),
-            )
-        }
     }
 
     TracingScreen(
@@ -290,13 +319,14 @@ private fun TracingScreen(
     /** 글자 목록이 바뀌면 처음 글자부터 다시 시작한다. */
     id: String = "",
     top: @Composable () -> Unit = {},
+    locale: Locale = Locale.KOREAN,
 ) {
     val context = LocalContext.current
     val speech = remember { arrayOfNulls<TextToSpeech>(1) }
     DisposableEffect(Unit) {
         var engine: TextToSpeech? = null
         engine = TextToSpeech(context.applicationContext) { status ->
-            if (status == TextToSpeech.SUCCESS) engine?.language = Locale.KOREAN
+            if (status == TextToSpeech.SUCCESS) engine?.language = locale
         }
         speech[0] = engine
         onDispose {

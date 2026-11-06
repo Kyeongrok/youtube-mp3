@@ -4,11 +4,14 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.sin
@@ -21,12 +24,23 @@ class KidsMusic {
     private var track: AudioTrack? = null
     private var feeder: Thread? = null
     @Volatile private var running = true
-    private var playing = false
+    @Volatile private var playing = false
 
     /** 곡을 만들고 재생 준비를 한다. 조금 걸리므로 백그라운드에서 부른다. */
     fun prepare() {
         if (track != null || !running) return
-        val songs = SONGS.map(::render)
+        // 곡은 틀 차례가 되었을 때 하나씩 만든다. 자바 힙 밖의 버퍼에 담아 넘긴다.
+        val songs = arrayOfNulls<ByteBuffer>(SONGS.size)
+        fun song(index: Int): ByteBuffer {
+            val i = index % SONGS.size
+            val buffer = songs[i] ?: run {
+                val samples = render(SONGS[i])
+                ByteBuffer.allocateDirect(samples.size * 2).order(ByteOrder.nativeOrder()).apply {
+                    asShortBuffer().put(samples)
+                }.also { songs[i] = it }
+            }
+            return buffer.duplicate().apply { position(0) }
+        }
         val minBuffer = AudioTrack.getMinBufferSize(RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val built = AudioTrack.Builder()
             .setAudioAttributes(
@@ -54,18 +68,30 @@ class KidsMusic {
             track = built
             if (playing) built.play()
         }
-        // 곡을 하나씩 흘려 넣는다. 멈춘 동안에는 버퍼가 차서 write가 기다린다.
+        // 곡을 하나씩 흘려 넣는다. 화면(메인 스레드)이 막히지 않도록 기다리지 않는 쓰기만 하고,
+        // 멈춘 동안이나 버퍼가 찼을 때는 이 스레드가 잠깐 쉰다. 다 쓰면 이 스레드가 스스로 정리한다.
         feeder = Thread {
             var index = 0
-            while (running) {
-                val song = songs[index % songs.size]
-                var offset = 0
-                while (running && offset < song.size) {
-                    val written = built.write(song, offset, minOf(4096, song.size - offset))
-                    if (written < 0) return@Thread
-                    offset += written
+            var song = song(0)
+            try {
+                while (running) {
+                    if (!playing) {
+                        Thread.sleep(100)
+                        continue
+                    }
+                    val written = built.write(song, song.remaining(), AudioTrack.WRITE_NON_BLOCKING)
+                    if (written < 0) break
+                    if (!song.hasRemaining()) {
+                        index++
+                        song = song(index)
+                    }
+                    // 버퍼가 차 있으면 조금 쉬었다가 다시 채운다.
+                    Thread.sleep(if (written == 0) 50 else 10)
                 }
-                index++
+            } catch (_: InterruptedException) {
+            } finally {
+                synchronized(this) { track = null }
+                built.release()
             }
         }.apply {
             isDaemon = true
@@ -85,15 +111,12 @@ class KidsMusic {
         track?.pause()
     }
 
+    /** 정리는 소리를 흘려 넣는 스레드가 한다. 여기서는 멈추고 끝내라고만 알린다. */
+    @Synchronized
     fun release() {
         running = false
-        synchronized(this) {
-            playing = false
-            track?.pause()
-            track?.flush()
-            track?.release()
-            track = null
-        }
+        playing = false
+        track?.pause()
         feeder?.interrupt()
         feeder = null
     }
@@ -196,22 +219,36 @@ class KidsMusic {
             val beats = song.melody.sumOf { it.second } + 2
             val total = (beats * beatSamples).toInt()
             val mix = DoubleArray(total)
-            fun note(start: Int, hz: Double, gain: Double, decay: Double) {
-                for (i in 0 until minOf(RATE * 2, total - start)) {
-                    val t = i.toDouble() / RATE
-                    // 오르골처럼 바로 울리고 서서히 사라진다. 배음을 조금 섞는다.
-                    val envelope = exp(-t * decay) * minOf(1.0, t * 400)
-                    val wave = sin(2 * PI * hz * t) + 0.3 * sin(4 * PI * hz * t) + 0.1 * sin(6 * PI * hz * t)
-                    mix[start + i] += wave * envelope * gain
+            // 오르골처럼 바로 울리고 서서히 사라진다. 배음을 조금 섞는다.
+            // 표본마다 sin·exp를 부르면 느려서, 회전과 곱셈만으로 파형과 줄어드는 크기를 이어 간다.
+            fun note(start: Int, hz: Double, gain: Double, decay: Double, seconds: Double) {
+                val length = minOf((RATE * seconds).toInt(), total - start)
+                val step = 2 * PI * hz / RATE
+                val c1 = cos(step); val s1 = sin(step)
+                val c2 = cos(2 * step); val s2 = sin(2 * step)
+                val c3 = cos(3 * step); val s3 = sin(3 * step)
+                var x1 = 1.0; var y1 = 0.0
+                var x2 = 1.0; var y2 = 0.0
+                var x3 = 1.0; var y3 = 0.0
+                val fall = exp(-decay / RATE)
+                var level = gain
+                val attack = RATE / 400
+                for (i in 0 until length) {
+                    val rise = if (i < attack) i.toDouble() / attack else 1.0
+                    mix[start + i] += (y1 + 0.3 * y2 + 0.1 * y3) * level * rise
+                    level *= fall
+                    val nx1 = x1 * c1 - y1 * s1; y1 = x1 * s1 + y1 * c1; x1 = nx1
+                    val nx2 = x2 * c2 - y2 * s2; y2 = x2 * s2 + y2 * c2; x2 = nx2
+                    val nx3 = x3 * c3 - y3 * s3; y3 = x3 * s3 + y3 * c3; x3 = nx3
                 }
             }
             var at = 0.0
             for ((semitone, length) in song.melody) {
-                note((at * beatSamples).toInt(), frequency(semitone, 1), 0.5, 4.0)
+                note((at * beatSamples).toInt(), frequency(semitone, 1), 0.5, 4.0, 1.0)
                 at += length
             }
             song.bass.forEachIndexed { index, semitone ->
-                note((index * song.bassBeats * beatSamples).toInt(), frequency(semitone, -1), 0.35, 2.5)
+                note((index * song.bassBeats * beatSamples).toInt(), frequency(semitone, -1), 0.35, 2.5, 1.5)
             }
             val peak = mix.maxOf { abs(it) }.coerceAtLeast(1e-6)
             // 끝은 쉬는 박이라 소리가 거의 사라져 있지만, 이어 붙일 때 튀지 않게 살짝 줄인다.

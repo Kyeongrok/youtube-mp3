@@ -132,7 +132,7 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 internal val ListPadding = PaddingValues(bottom = 16.dp)
 
 /** 앱 안의 화면들이다. None은 음악(YoutubeMp3) 화면이고 Home은 앱을 고르는 첫 화면이다. */
-private enum class MiniGame { Home, None, Sudoku, Shanghai, Riichi, FreeCell, Rummikub, Splendor, Saju, Hangul, Numbers }
+private enum class MiniGame { Home, None, Sudoku, Shanghai, Riichi, FreeCell, Rummikub, Splendor, Saju, Hangul, Numbers, Alphabet }
 
 private class AppEntry(val label: String, val icon: ImageVector, val target: MiniGame)
 
@@ -146,6 +146,7 @@ private val GAME_ENTRIES = listOf(
     AppEntry("사주", AppIcons.Saju, MiniGame.Saju),
     AppEntry("한글 배우기", AppIcons.Hangul, MiniGame.Hangul),
     AppEntry("숫자 공부", AppIcons.Numbers, MiniGame.Numbers),
+    AppEntry("알파벳", AppIcons.Alphabet, MiniGame.Alphabet),
 )
 
 private val APP_ENTRIES = listOf(AppEntry("음악", AppIcons.Music, MiniGame.None)) + GAME_ENTRIES
@@ -367,6 +368,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                 MiniGame.Saju -> SajuTopBar(onBack = { game = MiniGame.Home })
                 MiniGame.Hangul -> HangulTopBar(onBack = { game = MiniGame.Home })
                 MiniGame.Numbers -> NumberTopBar(onBack = { game = MiniGame.Home })
+                MiniGame.Alphabet -> AlphabetTopBar(onBack = { game = MiniGame.Home })
                 MiniGame.Home -> TopAppBar(
                     title = { AppTitle() },
                     actions = {
@@ -381,7 +383,7 @@ private fun MainScreen(viewModel: MainViewModel) {
         bottomBar = { PlayerBar(onOpen = { nowPlayingOpen = true }) },
         // 한 손으로 누르기 쉽게 메뉴는 오른쪽 아래에 둔다.
         floatingActionButton = {
-            if (game == MiniGame.None) {
+            if (game == MiniGame.None || game == MiniGame.Home) {
                 MenuButton(
                     onGame = { game = it },
                     onSettings = { settingsOpen = true },
@@ -400,6 +402,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                 onOpen = { game = it },
                 entries = remember(homeOrder) { orderedEntries(homeOrder) },
                 onReorder = { entries -> viewModel.setHomeOrder(entries.map { it.target.name }) },
+                onExit = requestExit,
             )
             return@Scaffold
         }
@@ -414,6 +417,7 @@ private fun MainScreen(viewModel: MainViewModel) {
                     MiniGame.Saju -> SajuScreen(viewModel)
                     MiniGame.Hangul -> HangulScreen()
                     MiniGame.Numbers -> NumberScreen()
+                    MiniGame.Alphabet -> AlphabetScreen()
                     else -> FreeCellScreen(viewModel)
                 }
             }
@@ -1037,6 +1041,7 @@ private fun HomeScreen(
     onOpen: (MiniGame) -> Unit,
     entries: List<AppEntry>,
     onReorder: (List<AppEntry>) -> Unit,
+    onExit: () -> Unit,
 ) {
     var order by remember { mutableStateOf(entries) }
     var pressed by remember { mutableStateOf<MiniGame?>(null) }
@@ -1059,7 +1064,7 @@ private fun HomeScreen(
             current.offset.y + dragOffset.y + current.size.height / 2f,
         )
         val target = items.find {
-            it.key != key.name &&
+            it.key != key.name && it.key != "exit" &&
                 center.x >= it.offset.x && center.x <= it.offset.x + it.size.width &&
                 center.y >= it.offset.y && center.y <= it.offset.y + it.size.height
         } ?: return
@@ -1179,6 +1184,24 @@ private fun HomeScreen(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                         Text(entry.label, style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
+            // 앱 종료는 옮길 수 없게 늘 맨 끝에 둔다.
+            item(key = "exit") {
+                ElevatedCard(onClick = onExit) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = null,
+                            Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Text("종료", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }

@@ -370,8 +370,9 @@ fun RiichiScreen() {
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(TableGreen).padding(6.dp)) {
-        val handWidth = min((maxWidth - 12.dp) / 15, 44.dp)
-        val small = min(handWidth * 0.72f, 26.dp)
+        // 내 손패는 두 줄로 크게 보여 준다. 한 줄에 7장과 뽑은 패 자리까지 들어가게 한다.
+        val handWidth = min((maxWidth - 24.dp) / 8, 60.dp)
+        val small = min((maxWidth - 12.dp) / 15 * 0.72f, 26.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             InfoBar(table, small)
             Column(
@@ -461,11 +462,17 @@ private fun Hand(
             dim = myTurn && !canDiscard,
         )
     }
-    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
-        sorted.forEach { tile(it) }
-        if (drawn != null) {
-            Spacer(Modifier.width(6.dp))
-            tile(drawn)
+    val firstRow = (sorted.size + 1) / 2
+    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
+            sorted.take(firstRow).forEach { tile(it) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
+            sorted.drop(firstRow).forEach { tile(it) }
+            if (drawn != null) {
+                Spacer(Modifier.width(8.dp))
+                tile(drawn)
+            }
         }
     }
 }

@@ -32,6 +32,7 @@ object Engine {
     private const val KEY_LAST_UPDATE = "lastUpdate"
 
     private val ready = CompletableDeferred<Unit>()
+    private val ffmpegReady = CompletableDeferred<Unit>()
 
     fun start(context: Context) {
         val appContext = context.applicationContext
@@ -39,13 +40,18 @@ object Engine {
             try {
                 YoutubeDL.getInstance().init(appContext)
                 FFmpeg.getInstance().init(appContext)
+                ffmpegReady.complete(Unit)
                 updateIfStale(appContext)
                 ready.complete(Unit)
             } catch (e: Exception) {
+                ffmpegReady.completeExceptionally(e)
                 ready.completeExceptionally(e)
             }
         }
     }
+
+    /** 함께 깔린 FFmpeg를 다른 곳(잘라내기 편집)에서 쓰기 전에 풀려 있기를 기다린다. yt-dlp 업데이트는 기다리지 않는다. */
+    suspend fun awaitFFmpeg() = ffmpegReady.await()
 
     private fun updateIfStale(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

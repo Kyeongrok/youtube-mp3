@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -168,8 +169,13 @@ class MainActivity : ComponentActivity() {
                 val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
+            val trimming by viewModel.trimming.collectAsStateWithLifecycle()
             AppTheme(dark, colorTheme) {
-                MainScreen(viewModel)
+                Box(Modifier.fillMaxSize()) {
+                    MainScreen(viewModel)
+                    // 잘라내기 편집은 어느 탭에서 열든 화면 전체를 덮는다.
+                    trimming?.let { track -> TrimScreen(track, viewModel, onDismiss = viewModel::closeTrim) }
+                }
             }
         }
     }
@@ -622,6 +628,14 @@ private fun LibraryTab(viewModel: MainViewModel) {
                             onClick = {
                                 menuFor = null
                                 adding = track
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("잘라내기") },
+                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                            onClick = {
+                                menuFor = null
+                                viewModel.openTrim(track)
                             },
                         )
                         DropdownMenuItem(

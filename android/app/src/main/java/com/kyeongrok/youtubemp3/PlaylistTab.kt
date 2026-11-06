@@ -223,6 +223,14 @@ private fun RecentTracks(deviceTracks: List<Track>, playlists: List<Playlist>, v
                                 adding = track
                             },
                         )
+                        DropdownMenuItem(
+                            text = { Text("잘라내기") },
+                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                            onClick = {
+                                menuFor = null
+                                viewModel.openTrim(track)
+                            },
+                        )
                     }
                 }
                 HorizontalDivider()
@@ -450,6 +458,14 @@ private fun PlaylistDetail(
                                     onClick = {
                                         menuFor = null
                                         viewModel.removePlaylistTrack(playlist.id, track.id)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("잘라내기") },
+                                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                    onClick = {
+                                        menuFor = null
+                                        viewModel.openTrim(track)
                                     },
                                 )
                                 DropdownMenuItem(

@@ -177,6 +177,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Downloads.enqueue(getApplication(), title, url, quality.value)
     }
 
+    private val mutableTrimming = MutableStateFlow<Track?>(null)
+    /** 잘라내기 편집 화면에 열린 곡. null이면 닫혀 있다. */
+    val trimming = mutableTrimming.asStateFlow()
+
+    fun openTrim(track: Track) {
+        mutableTrimming.value = track
+    }
+
+    fun closeTrim() {
+        mutableTrimming.value = null
+    }
+
     fun refreshTracks() {
         mutableTracks.value = Library.list(getApplication())
     }

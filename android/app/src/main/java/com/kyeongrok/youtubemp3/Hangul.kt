@@ -59,16 +59,32 @@ class HangulStroke(val points: List<Offset>) {
     }
 }
 
-class HangulLetter(val text: String, val strokes: List<HangulStroke>)
+
+/**
+ * 따라 쓸 글자다. [weight]는 획 굵기 배율로, 획이 많아 자모가 작아지는 글자일수록 가늘게 그려야
+ * 획끼리 뭉개지지 않는다.
+ */
+class HangulLetter(val text: String, val strokes: List<HangulStroke>, val weight: Float = 1f)
 
 private typealias Shape = List<List<Pair<Float, Float>>>
 
 /** 글자 칸 안의 네모 자리. 자모 하나를 이 안에 그린다. */
-private class JamoBox(val left: Float, val top: Float, val width: Float, val height: Float)
+private class JamoBox(val left: Float, val top: Float, val width: Float, val height: Float) {
+    /** 가로세로 비율(가로/세로)을 [min]~[max] 안으로 맞추도록 가운데를 기준으로 줄인다. */
+    fun fit(min: Float, max: Float): JamoBox = when {
+        width > height * max -> (height * max).let { JamoBox(left + (width - it) / 2, top, it, height) }
+        width < height * min -> (width / min).let { JamoBox(left, top + (height - it) / 2, width, it) }
+        else -> this
+    }
+}
 
 /**
  * 자모 획을 조합해 아무 한글 글자나 따라 쓸 수 있게 만든다.
- * 자모 모양은 0~1 칸 기준이고, 모음 모양(세로·가로·섞임)과 받침 유무에 따라 놓을 자리를 정한다.
+ *
+ * 옛 조합형 비트맵 글꼴(8×4×4벌)처럼 같은 자음이라도 놓이는 자리에 따라 모양을 바꾼다.
+ * - 세로 모음(ㅏ·ㅓ·ㅣ…) 왼쪽의 자음: 좁고 길며, ㄱ·ㅋ·ㅅ·ㅈ·ㅊ은 아래가 왼쪽으로 휘어 내려간다(가, 사, 자).
+ * - 가로 모음(ㅗ·ㅜ·ㅡ…) 위의 자음과 받침: 넓고 납작한 꺾인 모양이다(고, 각).
+ * 모음은 받침이 있으면 짧아지고, 받침은 글자 아래쪽을 넓게 차지한다.
  */
 object Hangul {
     private fun line(vararg points: Float) = points.toList().chunked(2).map { it[0] to it[1] }
@@ -79,50 +95,64 @@ object Hangul {
         (cx - rx * sin(t)).toFloat() to (cy - ry * cos(t)).toFloat()
     }
 
+    // 넓은 자리(가로 모음 위, 받침)에 쓰는 자음. 0~1 칸 기준이다.
     private val CONSONANT_SHAPES: Map<Char, Shape> = mapOf(
-        'ㄱ' to listOf(line(0f, 0.05f, 1f, 0.05f, 1f, 1f)),
-        'ㄴ' to listOf(line(0f, 0f, 0f, 0.95f, 1f, 0.95f)),
-        'ㄷ' to listOf(line(0f, 0.05f, 1f, 0.05f), line(0f, 0.05f, 0f, 0.95f, 1f, 0.95f)),
+        'ㄱ' to listOf(line(0f, 0f, 1f, 0f, 1f, 1f)),
+        'ㄴ' to listOf(line(0f, 0f, 0f, 1f, 1f, 1f)),
+        'ㄷ' to listOf(line(0f, 0f, 1f, 0f), line(0f, 0f, 0f, 1f, 1f, 1f)),
         'ㄹ' to listOf(
-            line(0f, 0.05f, 1f, 0.05f, 1f, 0.5f),
+            line(0f, 0f, 1f, 0f, 1f, 0.5f),
             line(0f, 0.5f, 1f, 0.5f),
-            line(0f, 0.5f, 0f, 0.95f, 1f, 0.95f),
+            line(0f, 0.5f, 0f, 1f, 1f, 1f),
         ),
         'ㅁ' to listOf(
-            line(0f, 0.05f, 0f, 0.95f),
-            line(0f, 0.05f, 1f, 0.05f, 1f, 0.95f),
-            line(0f, 0.95f, 1f, 0.95f),
+            line(0f, 0f, 0f, 1f),
+            line(0f, 0f, 1f, 0f, 1f, 1f),
+            line(0f, 1f, 1f, 1f),
         ),
         'ㅂ' to listOf(
-            line(0f, 0f, 0f, 0.95f),
-            line(1f, 0f, 1f, 0.95f),
-            line(0f, 0.45f, 1f, 0.45f),
-            line(0f, 0.95f, 1f, 0.95f),
+            line(0f, 0f, 0f, 1f),
+            line(1f, 0f, 1f, 1f),
+            line(0f, 0.48f, 1f, 0.48f),
+            line(0f, 1f, 1f, 1f),
         ),
-        'ㅅ' to listOf(line(0.5f, 0f, 0f, 1f), line(0.32f, 0.38f, 1f, 1f)),
-        'ㅇ' to listOf(circle(0.5f, 0.5f, 0.48f, 0.43f)),
-        'ㅈ' to listOf(line(0f, 0.05f, 0.95f, 0.05f, 0.05f, 1f), line(0.545f, 0.48f, 1f, 1f)),
+        'ㅅ' to listOf(line(0.5f, 0f, 0.3f, 0.55f, 0f, 1f), line(0.42f, 0.4f, 1f, 1f)),
+        'ㅇ' to listOf(circle(0.5f, 0.5f, 0.5f, 0.5f)),
+        'ㅈ' to listOf(line(0.04f, 0f, 0.96f, 0f, 0.5f, 0.5f, 0f, 1f), line(0.5f, 0.5f, 1f, 1f)),
         'ㅊ' to listOf(
-            line(0.5f, -0.12f, 0.5f, 0.03f),
-            line(0f, 0.22f, 0.95f, 0.22f, 0.05f, 1f),
-            line(0.545f, 0.57f, 1f, 1f),
+            line(0.5f, 0f, 0.5f, 0.18f),
+            line(0.04f, 0.3f, 0.96f, 0.3f, 0.5f, 0.65f, 0f, 1f),
+            line(0.5f, 0.65f, 1f, 1f),
         ),
-        'ㅋ' to listOf(line(0f, 0.05f, 1f, 0.05f, 1f, 1f), line(0f, 0.5f, 1f, 0.5f)),
+        'ㅋ' to listOf(line(0f, 0f, 1f, 0f, 1f, 1f), line(0f, 0.5f, 1f, 0.5f)),
         'ㅌ' to listOf(
-            line(0f, 0.05f, 1f, 0.05f),
+            line(0f, 0f, 1f, 0f),
             line(0f, 0.5f, 1f, 0.5f),
-            line(0f, 0.05f, 0f, 0.95f, 1f, 0.95f),
+            line(0f, 0f, 0f, 1f, 1f, 1f),
         ),
         'ㅍ' to listOf(
-            line(0f, 0.05f, 1f, 0.05f),
-            line(0.25f, 0.05f, 0.25f, 0.95f),
-            line(0.75f, 0.05f, 0.75f, 0.95f),
-            line(0f, 0.95f, 1f, 0.95f),
+            line(0f, 0f, 1f, 0f),
+            line(0.28f, 0f, 0.28f, 1f),
+            line(0.72f, 0f, 0.72f, 1f),
+            line(0f, 1f, 1f, 1f),
         ),
         'ㅎ' to listOf(
-            line(0.5f, -0.12f, 0.5f, 0.03f),
-            line(0f, 0.22f, 1f, 0.22f),
-            circle(0.5f, 0.72f, 0.42f, 0.28f),
+            line(0.5f, 0f, 0.5f, 0.16f),
+            line(0f, 0.3f, 1f, 0.3f),
+            circle(0.5f, 0.69f, 0.38f, 0.31f),
+        ),
+    )
+
+    // 세로 모음 왼쪽에 서는 자음 가운데 모양이 달라지는 것. 아래가 왼쪽으로 비껴 내려간다.
+    private val TALL_SHAPES: Map<Char, Shape> = mapOf(
+        'ㄱ' to listOf(line(0f, 0.04f, 0.92f, 0.04f, 0.9f, 0.32f, 0.8f, 0.62f, 0.56f, 1f)),
+        'ㅋ' to listOf(line(0f, 0.04f, 0.92f, 0.04f, 0.9f, 0.32f, 0.8f, 0.62f, 0.56f, 1f), line(0f, 0.46f, 0.84f, 0.46f)),
+        'ㅅ' to listOf(line(0.55f, 0f, 0.42f, 0.5f, 0f, 1f), line(0.47f, 0.4f, 1f, 1f)),
+        'ㅈ' to listOf(line(0f, 0.04f, 0.92f, 0.04f, 0.5f, 0.52f, 0f, 1f), line(0.5f, 0.52f, 1f, 1f)),
+        'ㅊ' to listOf(
+            line(0.48f, 0f, 0.48f, 0.16f),
+            line(0f, 0.3f, 0.92f, 0.3f, 0.5f, 0.66f, 0f, 1f),
+            line(0.5f, 0.66f, 1f, 1f),
         ),
     )
 
@@ -133,29 +163,29 @@ object Hangul {
         'ㄽ' to "ㄹㅅ", 'ㄾ' to "ㄹㅌ", 'ㄿ' to "ㄹㅍ", 'ㅀ' to "ㄹㅎ", 'ㅄ' to "ㅂㅅ",
     )
 
-    private fun v(x: Float) = line(x, 0f, x, 1f)
+    private fun v(x: Float, top: Float = 0f, bottom: Float = 1f) = line(x, top, x, bottom)
     private fun h(x1: Float, x2: Float, y: Float) = line(x1, y, x2, y)
 
-    // 세로로 긴 모음(칸 오른쪽에 선다).
+    // 세로로 긴 모음(칸 오른쪽에 선다). 기둥은 위에서 아래로, 곁줄기는 기둥에서 바깥으로 긋는다.
     private val TALL_VOWELS: Map<Char, Shape> = mapOf(
-        'ㅏ' to listOf(v(0.3f), h(0.3f, 0.9f, 0.5f)),
-        'ㅑ' to listOf(v(0.3f), h(0.3f, 0.9f, 0.36f), h(0.3f, 0.9f, 0.64f)),
-        'ㅓ' to listOf(h(0.1f, 0.7f, 0.5f), v(0.7f)),
-        'ㅕ' to listOf(h(0.1f, 0.7f, 0.36f), h(0.1f, 0.7f, 0.64f), v(0.7f)),
+        'ㅏ' to listOf(v(0.3f), h(0.3f, 1f, 0.48f)),
+        'ㅑ' to listOf(v(0.3f), h(0.3f, 1f, 0.34f), h(0.3f, 1f, 0.62f)),
+        'ㅓ' to listOf(h(0f, 0.7f, 0.48f), v(0.7f)),
+        'ㅕ' to listOf(h(0f, 0.7f, 0.34f), h(0f, 0.7f, 0.62f), v(0.7f)),
         'ㅣ' to listOf(v(0.5f)),
-        'ㅐ' to listOf(v(0.25f), h(0.25f, 0.62f, 0.5f), v(0.85f)),
-        'ㅒ' to listOf(v(0.25f), h(0.25f, 0.62f, 0.36f), h(0.25f, 0.62f, 0.64f), v(0.85f)),
-        'ㅔ' to listOf(h(0.05f, 0.45f, 0.5f), v(0.45f), v(0.85f)),
-        'ㅖ' to listOf(h(0.05f, 0.45f, 0.36f), h(0.05f, 0.45f, 0.64f), v(0.45f), v(0.85f)),
+        'ㅐ' to listOf(v(0.15f, 0.06f, 0.94f), h(0.15f, 0.62f, 0.48f), v(0.9f)),
+        'ㅒ' to listOf(v(0.15f, 0.06f, 0.94f), h(0.15f, 0.62f, 0.34f), h(0.15f, 0.62f, 0.62f), v(0.9f)),
+        'ㅔ' to listOf(h(0f, 0.42f, 0.48f), v(0.42f, 0.06f, 0.94f), v(0.9f)),
+        'ㅖ' to listOf(h(0f, 0.42f, 0.34f), h(0f, 0.42f, 0.62f), v(0.42f, 0.06f, 0.94f), v(0.9f)),
     )
 
-    // 가로로 긴 모음(자음 아래에 눕는다).
+    // 가로로 긴 모음(자음 아래에 눕는다). 칸 위쪽이 자음 쪽이다.
     private val FLAT_VOWELS: Map<Char, Shape> = mapOf(
-        'ㅗ' to listOf(line(0.5f, 0.1f, 0.5f, 0.6f), h(0f, 1f, 0.6f)),
-        'ㅛ' to listOf(line(0.35f, 0.1f, 0.35f, 0.6f), line(0.65f, 0.1f, 0.65f, 0.6f), h(0f, 1f, 0.6f)),
-        'ㅜ' to listOf(h(0f, 1f, 0.35f), line(0.5f, 0.35f, 0.5f, 0.95f)),
-        'ㅠ' to listOf(h(0f, 1f, 0.35f), line(0.35f, 0.35f, 0.35f, 0.95f), line(0.65f, 0.35f, 0.65f, 0.95f)),
-        'ㅡ' to listOf(h(0f, 1f, 0.5f)),
+        'ㅗ' to listOf(v(0.5f, 0.05f, 0.62f), h(0f, 1f, 0.62f)),
+        'ㅛ' to listOf(v(0.33f, 0.05f, 0.62f), v(0.67f, 0.05f, 0.62f), h(0f, 1f, 0.62f)),
+        'ㅜ' to listOf(h(0f, 1f, 0.3f), v(0.5f, 0.3f, 0.95f)),
+        'ㅠ' to listOf(h(0f, 1f, 0.3f), v(0.33f, 0.3f, 0.95f), v(0.67f, 0.3f, 0.95f)),
+        'ㅡ' to listOf(h(0f, 1f, 0.48f)),
     )
 
     // 섞인 모음 = 가로 모음 + 세로 모음.
@@ -179,63 +209,87 @@ object Hangul {
         return Triple(INITIALS[code / 588], MEDIALS[code % 588 / 28], final.takeIf { it != ' ' })
     }
 
-    private fun consonantShape(jamo: Char): Shape {
-        val pair = PAIRS[jamo] ?: return CONSONANT_SHAPES.getValue(jamo)
-        fun squeeze(shape: Shape, left: Float) = shape.map { stroke -> stroke.map { (x, y) -> left + x * 0.44f to y } }
-        return squeeze(CONSONANT_SHAPES.getValue(pair[0]), 0f) + squeeze(CONSONANT_SHAPES.getValue(pair[1]), 0.56f)
-    }
-
     private fun place(shape: Shape, box: JamoBox) = shape.map { stroke ->
         HangulStroke(stroke.map { (x, y) -> Offset(box.left + x * box.width, box.top + y * box.height) })
+    }
+
+    /** 자음 하나를 자리에 맞춰 놓는다. ㅇ·ㅎ은 동그라미가 찌그러지지 않게 자리를 줄인다. */
+    private fun single(jamo: Char, box: JamoBox, tall: Boolean): List<HangulStroke> {
+        val shape = (if (tall) TALL_SHAPES[jamo] else null) ?: CONSONANT_SHAPES.getValue(jamo)
+        val fitted = when (jamo) {
+            'ㅇ' -> box.fit(0.85f, 1.2f)
+            'ㅎ' -> box.fit(0.75f, 1.3f)
+            else -> box.fit(0.45f, 2.6f)
+        }
+        return place(shape, fitted)
+    }
+
+    /** 자음을 놓는다. 쌍자음·겹받침은 두 자음을 나란히, 사이를 띄워 놓는다. */
+    private fun consonant(jamo: Char, box: JamoBox, tall: Boolean): List<HangulStroke> {
+        val pair = PAIRS[jamo] ?: return single(jamo, box, tall)
+        val part = box.width * 0.42f
+        return single(pair[0], JamoBox(box.left, box.top, part, box.height), tall) +
+            single(pair[1], JamoBox(box.left + box.width - part, box.top, part, box.height), tall)
     }
 
     fun letter(ch: Char): HangulLetter {
         val (initial, medial, final) = split(ch)
         val hasFinal = final != null
+        val doubled = initial in PAIRS || final in PAIRS
         val strokes = mutableListOf<HangulStroke>()
-        val finalBox: JamoBox
+        val weight: Float
         when (medial) {
             in TALL_VOWELS -> {
-                strokes += place(
-                    consonantShape(initial),
-                    if (hasFinal) JamoBox(0.1f, 0.08f, 0.44f, 0.4f) else JamoBox(0.08f, 0.14f, 0.46f, 0.72f),
-                )
+                // 가, 각
+                weight = if (hasFinal) 0.72f else 0.92f
+                val narrow = medial in "ㅓㅕㅔㅖ" // 왼쪽으로 곁줄기가 나오는 모음은 자음을 좁힌다.
+                strokes += if (hasFinal) {
+                    consonant(initial, JamoBox(0.12f, 0.1f, if (narrow) 0.36f else 0.4f, 0.34f), tall = true)
+                } else {
+                    consonant(initial, JamoBox(0.1f, 0.2f, if (narrow) 0.38f else 0.42f, 0.6f), tall = true)
+                }
                 strokes += place(
                     TALL_VOWELS.getValue(medial),
-                    if (hasFinal) JamoBox(0.6f, 0.04f, 0.3f, 0.56f) else JamoBox(0.6f, 0.06f, 0.32f, 0.88f),
+                    if (hasFinal) JamoBox(0.6f, 0.06f, 0.3f, 0.48f) else JamoBox(0.6f, 0.08f, 0.3f, 0.84f),
                 )
-                finalBox = JamoBox(0.2f, 0.68f, 0.6f, 0.26f)
+                if (final != null) strokes += consonant(final, JamoBox(0.2f, 0.65f, 0.6f, 0.25f), tall = false)
             }
             in FLAT_VOWELS -> {
-                strokes += place(
-                    consonantShape(initial),
-                    if (hasFinal) JamoBox(0.28f, 0.06f, 0.44f, 0.26f) else JamoBox(0.25f, 0.08f, 0.5f, 0.4f),
-                )
+                // 고, 공
+                weight = if (hasFinal) 0.7f else 0.9f
+                val wide = initial in PAIRS
+                strokes += if (hasFinal) {
+                    consonant(initial, if (wide) JamoBox(0.18f, 0.07f, 0.64f, 0.25f) else JamoBox(0.27f, 0.07f, 0.46f, 0.25f), tall = false)
+                } else {
+                    consonant(initial, if (wide) JamoBox(0.19f, 0.12f, 0.62f, 0.3f) else JamoBox(0.24f, 0.1f, 0.52f, 0.34f), tall = false)
+                }
                 strokes += place(
                     FLAT_VOWELS.getValue(medial),
-                    if (hasFinal) JamoBox(0.1f, 0.36f, 0.8f, 0.26f) else JamoBox(0.08f, 0.56f, 0.84f, 0.36f),
+                    if (hasFinal) JamoBox(0.1f, 0.33f, 0.8f, 0.24f) else JamoBox(0.1f, 0.5f, 0.8f, 0.38f),
                 )
-                finalBox = JamoBox(0.22f, 0.68f, 0.56f, 0.26f)
+                if (final != null) strokes += consonant(final, JamoBox(0.2f, 0.66f, 0.6f, 0.25f), tall = false)
             }
             else -> {
+                // 와, 왕
+                weight = if (hasFinal) 0.62f else 0.8f
                 val (flat, tall) = MIXED_VOWELS.getValue(medial)
-                strokes += place(
-                    consonantShape(initial),
-                    if (hasFinal) JamoBox(0.1f, 0.06f, 0.38f, 0.24f) else JamoBox(0.08f, 0.08f, 0.42f, 0.36f),
-                )
+                strokes += if (hasFinal) {
+                    consonant(initial, JamoBox(0.14f, 0.07f, 0.38f, 0.22f), tall = false)
+                } else {
+                    consonant(initial, JamoBox(0.12f, 0.1f, 0.42f, 0.32f), tall = false)
+                }
                 strokes += place(
                     FLAT_VOWELS.getValue(flat),
-                    if (hasFinal) JamoBox(0.04f, 0.34f, 0.58f, 0.26f) else JamoBox(0.04f, 0.5f, 0.6f, 0.36f),
+                    if (hasFinal) JamoBox(0.07f, 0.31f, 0.58f, 0.26f) else JamoBox(0.07f, 0.47f, 0.58f, 0.4f),
                 )
                 strokes += place(
                     TALL_VOWELS.getValue(tall),
-                    if (hasFinal) JamoBox(0.66f, 0.02f, 0.3f, 0.6f) else JamoBox(0.66f, 0.04f, 0.3f, 0.92f),
+                    if (hasFinal) JamoBox(0.7f, 0.05f, 0.22f, 0.54f) else JamoBox(0.7f, 0.07f, 0.22f, 0.86f),
                 )
-                finalBox = JamoBox(0.2f, 0.7f, 0.6f, 0.24f)
+                if (final != null) strokes += consonant(final, JamoBox(0.2f, 0.68f, 0.6f, 0.23f), tall = false)
             }
         }
-        if (final != null) strokes += place(consonantShape(final), finalBox)
-        return HangulLetter(ch.toString(), strokes)
+        return HangulLetter(ch.toString(), strokes, if (doubled) weight * 0.85f else weight)
     }
 
     /** 획 순서 안내. 예: ㅍ+ㅣ+ㅇ */

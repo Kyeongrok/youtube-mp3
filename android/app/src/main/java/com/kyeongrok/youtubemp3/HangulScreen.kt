@@ -526,14 +526,16 @@ private fun TracingBoard(
             },
     ) {
         val unit = size.width
+        // 획이 많은 글자는 가늘게 그려야 자모가 뭉개지지 않는다. 안내 표시도 같이 줄인다.
+        val w = letter.weight
         drawSea()
         fun path(points: List<Offset>) = Path().apply {
             points.forEachIndexed { i, p ->
                 if (i == 0) moveTo(p.x * unit, p.y * unit) else lineTo(p.x * unit, p.y * unit)
             }
         }
-        val track = Stroke(TRACK_WIDTH * unit, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        val ink = Stroke(INK_WIDTH * unit, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val track = Stroke(TRACK_WIDTH * w * unit, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val ink = Stroke(INK_WIDTH * w * unit, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
         letter.strokes.forEach { drawPath(path(it.points), Color.White, style = track) }
         letter.strokes.take(stroke).forEach { drawPath(path(it.points), Ink, style = ink) }
@@ -542,22 +544,24 @@ private fun TracingBoard(
         if (progress > 0f) drawPath(path(current.pointsUntil(progress)), Ink, style = ink)
 
         // 남은 길에 진행 방향 화살표를 놓는다.
-        var s = progress + ARROW_GAP
-        while (s < current.length - ARROW_GAP * 0.6f) {
+        val gap = ARROW_GAP * w
+        var s = progress + gap
+        while (s < current.length - gap * 0.6f) {
             val a = current.pointAt(s - 0.01f)
             val b = current.pointAt(s + 0.01f)
-            arrow(current.pointAt(s) * unit, b - a, unit * 0.022f)
-            s += ARROW_GAP
+            arrow(current.pointAt(s) * unit, b - a, unit * 0.022f * w)
+            s += gap
         }
-        star(current.pointAt(current.length) * unit, unit * 0.045f)
+        star(current.pointAt(current.length) * unit, unit * 0.045f * w)
 
         // 펜 끝: 지금 쓰는 자리와 획 번호.
         val pen = current.pointAt(progress) * unit
-        drawCircle(Color(0xFF7E57C2), unit * 0.04f, pen)
-        drawCircle(Color.White, unit * 0.04f, pen, style = Stroke(unit * 0.008f))
+        val penRadius = unit * 0.04f * w
+        drawCircle(Color(0xFF7E57C2), penRadius, pen)
+        drawCircle(Color.White, penRadius, pen, style = Stroke(unit * 0.008f))
         val label = measurer.measure(
             "${stroke + 1}",
-            TextStyle(color = Color.White, fontSize = (unit * 0.04f / density).sp, fontWeight = FontWeight.Bold),
+            TextStyle(color = Color.White, fontSize = (penRadius / density).sp, fontWeight = FontWeight.Bold),
         )
         drawText(label, topLeft = pen - Offset(label.size.width / 2f, label.size.height / 2f))
     }

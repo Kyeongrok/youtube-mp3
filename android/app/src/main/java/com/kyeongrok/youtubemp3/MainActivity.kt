@@ -132,17 +132,11 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 internal val ListPadding = PaddingValues(bottom = 16.dp)
 
 /** 앱 안의 화면들이다. None은 음악(YoutubeMp3) 화면이고 Home은 앱을 고르는 첫 화면이다. */
-private enum class MiniGame { Home, None, Sudoku, Shanghai, Riichi, FreeCell, Rummikub, Splendor, Saju, Hangul, Numbers, Alphabet }
+private enum class MiniGame { Home, None, Saju, Hangul, Numbers, Alphabet }
 
 private class AppEntry(val label: String, val icon: ImageVector, val target: MiniGame)
 
 private val GAME_ENTRIES = listOf(
-    AppEntry("스도쿠", AppIcons.Sudoku, MiniGame.Sudoku),
-    AppEntry("상하이", AppIcons.Shanghai, MiniGame.Shanghai),
-    AppEntry("리치마작", AppIcons.Riichi, MiniGame.Riichi),
-    AppEntry("프리셀", AppIcons.FreeCell, MiniGame.FreeCell),
-    AppEntry("루미큐브", AppIcons.Rummikub, MiniGame.Rummikub),
-    AppEntry("스플렌더", AppIcons.Splendor, MiniGame.Splendor),
     AppEntry("사주", AppIcons.Saju, MiniGame.Saju),
     AppEntry("한글 배우기", AppIcons.Hangul, MiniGame.Hangul),
     AppEntry("숫자 공부", AppIcons.Numbers, MiniGame.Numbers),
@@ -359,12 +353,6 @@ private fun MainScreen(viewModel: MainViewModel) {
     Scaffold(
         topBar = {
             when (game) {
-                MiniGame.Sudoku -> SudokuTopBar(viewModel, onBack = { game = MiniGame.Home })
-                MiniGame.Shanghai -> ShanghaiTopBar(viewModel, onBack = { game = MiniGame.Home })
-                MiniGame.Riichi -> RiichiTopBar(onBack = { game = MiniGame.Home })
-                MiniGame.FreeCell -> FreeCellTopBar(viewModel, onBack = { game = MiniGame.Home })
-                MiniGame.Rummikub -> RummikubTopBar(viewModel, onBack = { game = MiniGame.Home })
-                MiniGame.Splendor -> SplendorTopBar(viewModel, onBack = { game = MiniGame.Home })
                 MiniGame.Saju -> SajuTopBar(onBack = { game = MiniGame.Home })
                 MiniGame.Hangul -> HangulTopBar(onBack = { game = MiniGame.Home })
                 MiniGame.Numbers -> NumberTopBar(onBack = { game = MiniGame.Home })
@@ -409,16 +397,10 @@ private fun MainScreen(viewModel: MainViewModel) {
         if (game != MiniGame.None) {
             Column(Modifier.padding(padding).fillMaxSize()) {
                 when (game) {
-                    MiniGame.Sudoku -> SudokuScreen(viewModel)
-                    MiniGame.Shanghai -> ShanghaiScreen(viewModel)
-                    MiniGame.Riichi -> RiichiScreen()
-                    MiniGame.Rummikub -> RummikubScreen(viewModel)
-                    MiniGame.Splendor -> SplendorScreen(viewModel)
                     MiniGame.Saju -> SajuScreen(viewModel)
                     MiniGame.Hangul -> HangulScreen()
                     MiniGame.Numbers -> NumberScreen()
-                    MiniGame.Alphabet -> AlphabetScreen()
-                    else -> FreeCellScreen(viewModel)
+                    else -> AlphabetScreen()
                 }
             }
             return@Scaffold
@@ -523,8 +505,6 @@ private fun SettingsDialog(
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
-    val tableSize by viewModel.rummikubTableSize.collectAsStateWithLifecycle()
-    val blinkDuration by viewModel.rummikubBlinkDuration.collectAsStateWithLifecycle()
     val dark = isDarkTheme(themeMode)
 
     AlertDialog(
@@ -552,34 +532,6 @@ private fun SettingsDialog(
                         ColorTheme.entries.forEach { color ->
                             ColorSwatch(color, color == colorTheme) { viewModel.setColorTheme(color) }
                         }
-                    }
-                }
-                Text(
-                    "루미큐브 판 타일 크기",
-                    Modifier.padding(top = 12.dp, bottom = 4.dp),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RummikubTableSize.entries.forEach { size ->
-                        FilterChip(
-                            selected = size == tableSize,
-                            onClick = { viewModel.setRummikubTableSize(size) },
-                            label = { Text(size.label, maxLines = 1) },
-                        )
-                    }
-                }
-                Text(
-                    "루미큐브 뽑은 타일 깜빡임",
-                    Modifier.padding(top = 12.dp, bottom = 4.dp),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RummikubBlinkDuration.entries.forEach { duration ->
-                        FilterChip(
-                            selected = duration == blinkDuration,
-                            onClick = { viewModel.setRummikubBlinkDuration(duration) },
-                            label = { Text(duration.label, maxLines = 1) },
-                        )
                     }
                 }
                 Text(

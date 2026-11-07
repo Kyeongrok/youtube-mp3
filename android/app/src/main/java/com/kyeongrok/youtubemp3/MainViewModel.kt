@@ -1,17 +1,12 @@
 package com.kyeongrok.youtubemp3
 
 import android.app.Application
-import android.os.SystemClock
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     val quality = MutableStateFlow(DEFAULT_QUALITY)
@@ -42,55 +37,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val mutableColorTheme = MutableStateFlow(AppSettings.loadColor(application))
     val colorTheme = mutableColorTheme.asStateFlow()
-
-    private val mutableRummikubTableSize = MutableStateFlow(AppSettings.loadRummikubTableSize(application))
-    val rummikubTableSize = mutableRummikubTableSize.asStateFlow()
-
-    private val mutableRummikubBlinkDuration = MutableStateFlow(AppSettings.loadRummikubBlinkDuration(application))
-    val rummikubBlinkDuration = mutableRummikubBlinkDuration.asStateFlow()
-
-    private val mutableSudoku = MutableStateFlow(SavedGames.loadSudoku(application))
-    val sudoku = mutableSudoku.asStateFlow()
-
-    private val mutableSudokuRecords = MutableStateFlow(SudokuRecords.load(application))
-    val sudokuRecords = mutableSudokuRecords.asStateFlow()
-
-    // 판이 매초 다시 그려지지 않도록 게임 상태와 따로 세고, 저장하거나 끝날 때 게임에 옮긴다.
-    private var sudokuSeconds = mutableSudoku.value?.seconds ?: 0
-
-    private val mutableShanghai = MutableStateFlow(SavedGames.loadShanghai(application))
-    val shanghai = mutableShanghai.asStateFlow()
-
-    private val mutableShanghaiRecords = MutableStateFlow(ShanghaiRecords.load(application))
-    val shanghaiRecords = mutableShanghaiRecords.asStateFlow()
-
-    private var shanghaiSeconds = mutableShanghai.value?.seconds ?: 0
-
-    private val mutableFreeCell = MutableStateFlow(SavedGames.loadFreeCell(application))
-    val freeCell = mutableFreeCell.asStateFlow()
-
-    private var lastCardTap = 0L
-
-    private val mutableRummikub = MutableStateFlow(SavedGames.loadRummikub(application))
-    val rummikub = mutableRummikub.asStateFlow()
-
-    private val mutableRummikubRecords = MutableStateFlow(RummikubRecords.load(application))
-    val rummikubRecords = mutableRummikubRecords.asStateFlow()
-
-    private var rummikubSeconds = mutableRummikub.value?.seconds ?: 0
-    private var rummikubCpu: Job? = null
-
-    private val mutableRummikubPractice = MutableStateFlow<RummikubPractice?>(null)
-    val rummikubPractice = mutableRummikubPractice.asStateFlow()
-
-    private val mutableSplendor = MutableStateFlow(SavedGames.loadSplendor(application))
-    val splendor = mutableSplendor.asStateFlow()
-
-    private val mutableSplendorRecords = MutableStateFlow(SplendorRecords.load(application))
-    val splendorRecords = mutableSplendorRecords.asStateFlow()
-
-    private var splendorSeconds = mutableSplendor.value?.seconds ?: 0
-    private var splendorCpu: Job? = null
 
     private val mutableSajuProfiles = MutableStateFlow(SajuProfiles.load(application))
     val sajuProfiles = mutableSajuProfiles.asStateFlow()
@@ -124,16 +70,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setColorTheme(color: ColorTheme) {
         mutableColorTheme.value = color
         AppSettings.saveColor(getApplication(), color)
-    }
-
-    fun setRummikubTableSize(size: RummikubTableSize) {
-        mutableRummikubTableSize.value = size
-        AppSettings.saveRummikubTableSize(getApplication(), size)
-    }
-
-    fun setRummikubBlinkDuration(duration: RummikubBlinkDuration) {
-        mutableRummikubBlinkDuration.value = duration
-        AppSettings.saveRummikubBlinkDuration(getApplication(), duration)
     }
 
     private val mutableCheckingUpdate = MutableStateFlow(false)
@@ -307,237 +243,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Playlists.save(getApplication(), playlists)
     }
 
-    fun newSudoku(level: SudokuLevel) {
-        viewModelScope.launch {
-            mutableSudoku.value = withContext(Dispatchers.Default) { Sudoku.generate(level) }
-            sudokuSeconds = 0
-            saveSudoku()
-        }
-    }
-
-    fun tickSudoku() {
-        if (mutableSudoku.value?.isComplete == false) sudokuSeconds++
-    }
-
-    fun saveSudoku() {
-        mutableSudoku.value?.let { SavedGames.saveSudoku(getApplication(), it.copy(seconds = sudokuSeconds)) }
-    }
-
-    fun enterSudoku(index: Int, digit: Int) {
-        val game = mutableSudoku.value ?: return
-        val next = game.enter(index, digit)
-        if (next.isComplete && !game.isComplete) {
-            mutableSudoku.value = next.copy(seconds = sudokuSeconds)
-            val record = SudokuRecord(System.currentTimeMillis(), next.level, sudokuSeconds, next.mistakes)
-            mutableSudokuRecords.value = listOf(record) + mutableSudokuRecords.value
-            SudokuRecords.save(getApplication(), mutableSudokuRecords.value)
-        } else {
-            mutableSudoku.value = next
-        }
-        saveSudoku()
-    }
-
-    fun toggleSudokuNote(index: Int, digit: Int) {
-        mutableSudoku.value = mutableSudoku.value?.toggleNote(index, digit)
-        saveSudoku()
-    }
-
-    fun newFreeCell() {
-        val game = FreeCellGame.deal()
-        mutableFreeCell.value = game
-        SavedGames.saveFreeCell(getApplication(), game)
-    }
-
-    fun undoFreeCell() {
-        updateFreeCell(mutableFreeCell.value?.undo())
-    }
-
-    /** 카드를 고르기만 한 탭은 저장하지 않는다. */
-    private fun updateFreeCell(next: FreeCellGame?) {
-        val moved = next?.previous !== mutableFreeCell.value?.previous
-        mutableFreeCell.value = next
-        if (next != null && moved) SavedGames.saveFreeCell(getApplication(), next)
-    }
-
-    /** 첫 탭은 바로 카드를 고르고, 이어서 같은 끝 카드를 누르면 빈 프리셀로 옮긴다. */
-    fun tapFreeCellCascade(column: Int, row: Int?) {
-        val game = mutableFreeCell.value ?: return
-        val now = SystemClock.uptimeMillis()
-        val doubleTap = row != null && row == game.cascades[column].lastIndex &&
-            game.picked == FreeCellPick.Cascade(column, row) && now - lastCardTap < DOUBLE_TAP_MILLIS
-        val emptyCell = game.cells.indexOf(null)
-        lastCardTap = now
-        updateFreeCell(if (doubleTap && emptyCell >= 0) game.tapCell(emptyCell) else game.tapCascade(column, row))
-    }
-
-    fun tapFreeCellSpot(index: Int) {
-        updateFreeCell(mutableFreeCell.value?.tapCell(index))
-    }
-
-    fun tapFreeCellFoundation() {
-        updateFreeCell(mutableFreeCell.value?.tapFoundation())
-    }
-
-    fun newShanghai() {
-        viewModelScope.launch {
-            mutableShanghai.value = withContext(Dispatchers.Default) { Shanghai.generate() }
-            shanghaiSeconds = 0
-            saveShanghai()
-        }
-    }
-
-    fun tickShanghai() {
-        if (mutableShanghai.value?.isComplete == false) shanghaiSeconds++
-    }
-
-    fun saveShanghai() {
-        mutableShanghai.value?.let { SavedGames.saveShanghai(getApplication(), it.copy(seconds = shanghaiSeconds)) }
-    }
-
-    fun pickShanghai(index: Int) {
-        val game = mutableShanghai.value ?: return
-        val next = game.pick(index)
-        if (next.isComplete && !game.isComplete) {
-            mutableShanghai.value = next.copy(seconds = shanghaiSeconds)
-            val record = ShanghaiRecord(System.currentTimeMillis(), shanghaiSeconds, next.shuffles)
-            mutableShanghaiRecords.value = listOf(record) + mutableShanghaiRecords.value
-            ShanghaiRecords.save(getApplication(), mutableShanghaiRecords.value)
-        } else {
-            mutableShanghai.value = next
-        }
-        if (next.faces !== game.faces) saveShanghai()
-    }
-
-    fun showShanghaiHint() {
-        mutableShanghai.value = mutableShanghai.value?.showHint()
-    }
-
-    fun shuffleShanghai() {
-        val game = mutableShanghai.value ?: return
-        viewModelScope.launch {
-            val shuffled = withContext(Dispatchers.Default) { game.shuffled() }
-            if (shuffled != null) {
-                mutableShanghai.value = shuffled
-                saveShanghai()
-            } else {
-                Toast.makeText(getApplication(), "남은 패로는 풀 수 없습니다. 새 게임을 시작해 주세요.", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    val rummikubTutorialSeen get() = AppSettings.loadRummikubTutorialSeen(getApplication())
-
-    fun markRummikubTutorialSeen() {
-        AppSettings.saveRummikubTutorialSeen(getApplication())
-    }
-
-    fun newRummikub(cpus: Int) {
-        rummikubCpu?.cancel()
-        mutableRummikub.value = Rummikub.deal(cpus)
-        rummikubSeconds = 0
-        saveRummikub()
-    }
-
-    fun tickRummikub() {
-        if (mutableRummikubPractice.value == null && mutableRummikub.value?.isFinished == false) rummikubSeconds++
-    }
-
-    fun startRummikubPractice() {
-        mutableRummikubPractice.value = RummikubPractice.start()
-    }
-
-    fun stopRummikubPractice() {
-        mutableRummikubPractice.value = null
-    }
-
-    fun nextRummikubPractice() {
-        mutableRummikubPractice.value = mutableRummikubPractice.value?.next()
-    }
-
-    /** 연습 중에는 진행 중인 게임 대신 연습 판을 바꾼다. */
-    private fun changeRummikub(update: (RummikubGame) -> RummikubGame) {
-        val practice = mutableRummikubPractice.value
-        if (practice != null) {
-            mutableRummikubPractice.value = practice.change(update)
-        } else {
-            mutableRummikub.value = mutableRummikub.value?.let(update)
-        }
-    }
-
-    fun saveRummikub() {
-        val game = mutableRummikub.value ?: return
-        SavedGames.saveRummikub(getApplication(), game.atTurnStart().copy(seconds = rummikubSeconds))
-    }
-
-    fun tapRummikubTile(tile: RummikubTile) {
-        changeRummikub { it.tapTile(tile) }
-    }
-
-    fun moveRummikubTo(meld: Int) {
-        changeRummikub { it.moveTo(meld) }
-    }
-
-    fun newRummikubMeld() {
-        changeRummikub { it.newMeld() }
-    }
-
-    fun returnRummikubTiles() {
-        changeRummikub { it.returnPicked() }
-    }
-
-    fun resetRummikubTurn() {
-        changeRummikub { it.resetTurn() }
-    }
-
-    fun drawRummikub() {
-        mutableRummikubPractice.value?.let {
-            mutableRummikubPractice.value = it.draw()
-            return
-        }
-        val game = mutableRummikub.value ?: return
-        if (!game.isHumanTurn || !game.isUntouched) return
-        finishRummikubTurn(game.draw())
-        resumeRummikub()
-    }
-
-    fun finishRummikubTurn() {
-        mutableRummikubPractice.value?.let {
-            mutableRummikubPractice.value = it.finishTurn()
-            return
-        }
-        val game = mutableRummikub.value ?: return
-        val next = game.finishTurn()
-        if (game.problem != null) {
-            mutableRummikub.value = next
-            return
-        }
-        finishRummikubTurn(next)
-        resumeRummikub()
-    }
-
-    /** 컴퓨터 차례면 내 차례가 돌아올 때까지 하나씩 둔다. */
-    fun resumeRummikub() {
-        if (rummikubCpu?.isActive == true) return
-        rummikubCpu = viewModelScope.launch {
-            while (true) {
-                val game = mutableRummikub.value ?: break
-                if (game.turn == Rummikub.HUMAN || game.isFinished) break
-                delay(CPU_TURN_MILLIS)
-                finishRummikubTurn(withContext(Dispatchers.Default) { game.cpuTurn() })
-            }
-        }
-    }
-
-    private fun finishRummikubTurn(next: RummikubGame) {
-        mutableRummikub.value = next.copy(seconds = rummikubSeconds)
-        if (next.winner == Rummikub.HUMAN) {
-            val record = RummikubRecord(System.currentTimeMillis(), next.cpus, rummikubSeconds, next.humanScore)
-            mutableRummikubRecords.value = listOf(record) + mutableRummikubRecords.value
-            RummikubRecords.save(getApplication(), mutableRummikubRecords.value)
-        }
-        saveRummikub()
-    }
-
     /** 같은 사람이 있으면 고치고, 없으면 끝에 더한다. */
     fun saveSajuProfile(profile: SajuProfile) {
         val profiles = mutableSajuProfiles.value
@@ -554,73 +259,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SajuProfiles.save(getApplication(), mutableSajuProfiles.value)
     }
 
-    fun newSplendor(cpus: Int) {
-        splendorCpu?.cancel()
-        mutableSplendor.value = Splendor.deal(cpus)
-        splendorSeconds = 0
-        saveSplendor()
-    }
-
-    fun tickSplendor() {
-        if (mutableSplendor.value?.isFinished == false) splendorSeconds++
-    }
-
-    fun saveSplendor() {
-        val game = mutableSplendor.value ?: return
-        SavedGames.saveSplendor(getApplication(), game.copy(seconds = splendorSeconds))
-    }
-
-    fun tapSplendorGem(color: Int) {
-        mutableSplendor.value = mutableSplendor.value?.tapGem(color)
-    }
-
-    fun clearSplendorGems() {
-        mutableSplendor.value = mutableSplendor.value?.clearPicked()
-    }
-
-    fun takeSplendorGems() = playSplendor { it.takePicked() }
-
-    fun buySplendor(cardId: Int) = playSplendor { it.buy(cardId) }
-
-    fun reserveSplendor(cardId: Int?, tier: Int) = playSplendor { it.reserve(cardId, tier) }
-
-    fun discardSplendor(color: Int) = playSplendor { it.discard(color) }
-
-    private fun playSplendor(action: (SplendorGame) -> SplendorGame) {
-        val game = mutableSplendor.value ?: return
-        finishSplendorTurn(action(game))
-        resumeSplendor()
-    }
-
-    /** 컴퓨터 차례면 내 차례가 돌아올 때까지 하나씩 둔다. */
-    fun resumeSplendor() {
-        if (splendorCpu?.isActive == true) return
-        splendorCpu = viewModelScope.launch {
-            while (true) {
-                val game = mutableSplendor.value ?: break
-                if (game.turn == Splendor.HUMAN || game.isFinished) break
-                delay(CPU_TURN_MILLIS)
-                finishSplendorTurn(withContext(Dispatchers.Default) { game.cpuTurn() })
-            }
-        }
-    }
-
-    private fun finishSplendorTurn(next: SplendorGame) {
-        val wasFinished = mutableSplendor.value?.isFinished == true
-        mutableSplendor.value = next.copy(seconds = splendorSeconds)
-        if (!wasFinished && next.winner == Splendor.HUMAN) {
-            val record = SplendorRecord(System.currentTimeMillis(), next.cpus, splendorSeconds, next.me.points)
-            mutableSplendorRecords.value = listOf(record) + mutableSplendorRecords.value
-            SplendorRecords.save(getApplication(), mutableSplendorRecords.value)
-        }
-        saveSplendor()
-    }
-
     companion object {
         val QUALITIES = listOf("320K", "192K", "128K")
         private const val DEFAULT_QUALITY = "192K"
-        private const val DOUBLE_TAP_MILLIS = 400L
-        private const val CPU_TURN_MILLIS = 900L
 
         private val URL_PATTERN = Regex("""https?://\S+""")
 

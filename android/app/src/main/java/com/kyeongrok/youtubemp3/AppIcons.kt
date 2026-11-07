@@ -64,54 +64,6 @@ object AppIcons {
         }
     }
 
-    /** 3×3 칸. */
-    val Sudoku: ImageVector = materialIcon("App.Sudoku") {
-        materialPath {
-            for (row in 0..2) {
-                for (col in 0..2) {
-                    moveTo(3f + col * 6.5f, 3f + row * 6.5f)
-                    horizontalLineToRelative(5f); verticalLineToRelative(5f); horizontalLineToRelative(-5f); close()
-                }
-            }
-        }
-    }
-
-    /** 뒤에 한 장이 비치는 마작 패. 앞 패에는 동그라미 무늬를 뚫는다. */
-    val Shanghai: ImageVector = materialIcon("App.Shanghai") {
-        materialPath {
-            moveTo(8f, 2f); horizontalLineToRelative(12f); verticalLineToRelative(15f); horizontalLineToRelative(-3f)
-            verticalLineTo(5f); horizontalLineTo(8f); close()
-        }
-        materialPath(pathFillType = PathFillType.EvenOdd) {
-            moveTo(4f, 7f); horizontalLineToRelative(11f); verticalLineToRelative(15f); horizontalLineTo(4f); close()
-            moveTo(9.5f, 11f)
-            arcToRelative(3.5f, 3.5f, 0f, true, true, 0f, 7f)
-            arcToRelative(3.5f, 3.5f, 0f, true, true, 0f, -7f)
-            close()
-        }
-    }
-
-    /** 세워 놓은 마작 패와 그 아래 리치 막대. */
-    val Riichi: ImageVector = materialIcon("App.Riichi") {
-        materialPath(pathFillType = PathFillType.EvenOdd) {
-            moveTo(6f, 2f); horizontalLineToRelative(12f); verticalLineToRelative(14f); horizontalLineTo(6f); close()
-            moveTo(8f, 4f); verticalLineToRelative(10f); horizontalLineToRelative(8f); verticalLineTo(4f); close()
-        }
-        materialPath {
-            moveTo(12f, 6.5f)
-            arcToRelative(2.5f, 2.5f, 0f, true, true, 0f, 5f)
-            arcToRelative(2.5f, 2.5f, 0f, true, true, 0f, -5f)
-            close()
-        }
-        materialPath(pathFillType = PathFillType.EvenOdd) {
-            moveTo(2f, 18.5f); horizontalLineToRelative(20f); verticalLineToRelative(3f); horizontalLineTo(2f); close()
-            moveTo(12f, 19.2f)
-            arcToRelative(0.8f, 0.8f, 0f, true, true, 0f, 1.6f)
-            arcToRelative(0.8f, 0.8f, 0f, true, true, 0f, -1.6f)
-            close()
-        }
-    }
-
     /** 대문자 A와 작은 a. */
     val Alphabet: ImageVector = materialIcon("App.Alphabet") {
         materialPath(pathFillType = PathFillType.EvenOdd) {
@@ -152,25 +104,6 @@ object AppIcons {
         }
     }
 
-    /** 다이아몬드가 그려진 카드. */
-    val FreeCell: ImageVector = materialIcon("App.FreeCell") {
-        materialPath(pathFillType = PathFillType.EvenOdd) {
-            moveTo(5f, 2f); horizontalLineToRelative(14f); verticalLineToRelative(20f); horizontalLineTo(5f); close()
-            moveTo(7f, 4f); verticalLineToRelative(16f); horizontalLineToRelative(10f); verticalLineTo(4f); close()
-        }
-        materialPath {
-            moveTo(12f, 7f); lineToRelative(3.5f, 5f); lineToRelative(-3.5f, 5f); lineToRelative(-3.5f, -5f); close()
-        }
-    }
-
-    /** 위가 깎인 보석. 윗면과 아랫면 사이를 가는 틈으로 나눈다. */
-    val Splendor: ImageVector = materialIcon("App.Splendor") {
-        materialPath {
-            moveTo(6f, 3f); horizontalLineTo(18f); lineTo(22f, 8.5f); horizontalLineTo(2f); close()
-            moveTo(2f, 10f); horizontalLineTo(22f); lineTo(12f, 21.5f); close()
-        }
-    }
-
     /** 태극 모양. 바깥 테 안에 어두운 반쪽과 점 하나를 그린다. */
     val Saju: ImageVector = materialIcon("App.Saju") {
         materialPath(pathFillType = PathFillType.EvenOdd) {
@@ -203,16 +136,6 @@ object AppIcons {
             verticalLineTo(7.5f); horizontalLineTo(2.5f); close()
             moveTo(15f, 3f); horizontalLineToRelative(2.5f); verticalLineToRelative(18f); horizontalLineTo(15f); close()
             moveTo(17.5f, 10.8f); horizontalLineTo(21.5f); verticalLineToRelative(2.4f); horizontalLineTo(17.5f); close()
-        }
-    }
-
-    /** 나란히 놓인 타일 세 장. */
-    val Rummikub: ImageVector = materialIcon("App.Rummikub") {
-        materialPath {
-            for (index in 0..2) {
-                moveTo(1.5f + index * 7.5f, 6f)
-                horizontalLineToRelative(6f); verticalLineToRelative(12f); horizontalLineToRelative(-6f); close()
-            }
         }
     }
 }

@@ -25,30 +25,10 @@ enum class ColorTheme(
     Pink("분홍", 0xFFB0276D, 0xFFFFD9E3, 0xFF3E001E, 0xFFF9DBE3, 0xFFFFFBFF, 0xFFF3DDE1),
 }
 
-/** 루미큐브 판 타일의 크기. 배율은 화면 폭에 맞춘 기본 크기에 곱한다. */
-enum class RummikubTableSize(val label: String, val scale: Float) {
-    Small("작게", 0.8f),
-    Medium("보통", 1f),
-    Large("크게", 1.3f),
-    Largest("최대", 1.6f),
-}
-
-/** 루미큐브에서 뽑은 타일이 내 차례가 시작된 뒤 깜빡이는 시간. null이면 차례를 마칠 때까지 깜빡인다. */
-enum class RummikubBlinkDuration(val label: String, val seconds: Int?) {
-    Three("3초", 3),
-    Five("5초", 5),
-    Ten("10초", 10),
-    Thirty("30초", 30),
-    Always("계속", null),
-}
-
 object AppSettings {
     private const val FILE_NAME = "settings"
     private const val KEY_THEME = "theme"
     private const val KEY_COLOR = "color"
-    private const val KEY_RUMMIKUB_TUTORIAL = "rummikubTutorialSeen"
-    private const val KEY_RUMMIKUB_TABLE_SIZE = "rummikubTableSize"
-    private const val KEY_RUMMIKUB_BLINK = "rummikubBlinkDuration"
     private const val KEY_LAST_SCREEN = "lastScreen"
     private const val KEY_HOME_ORDER = "homeOrder"
     private const val KEY_MUSIC_TAB = "musicTab"
@@ -69,30 +49,6 @@ object AppSettings {
 
     fun saveColor(context: Context, color: ColorTheme) {
         preferences(context).edit().putString(KEY_COLOR, color.name).apply()
-    }
-
-    fun loadRummikubTutorialSeen(context: Context) = preferences(context).getBoolean(KEY_RUMMIKUB_TUTORIAL, false)
-
-    fun saveRummikubTutorialSeen(context: Context) {
-        preferences(context).edit().putBoolean(KEY_RUMMIKUB_TUTORIAL, true).apply()
-    }
-
-    fun loadRummikubTableSize(context: Context): RummikubTableSize {
-        val name = preferences(context).getString(KEY_RUMMIKUB_TABLE_SIZE, null)
-        return RummikubTableSize.entries.find { it.name == name } ?: RummikubTableSize.Medium
-    }
-
-    fun saveRummikubTableSize(context: Context, size: RummikubTableSize) {
-        preferences(context).edit().putString(KEY_RUMMIKUB_TABLE_SIZE, size.name).apply()
-    }
-
-    fun loadRummikubBlinkDuration(context: Context): RummikubBlinkDuration {
-        val name = preferences(context).getString(KEY_RUMMIKUB_BLINK, null)
-        return RummikubBlinkDuration.entries.find { it.name == name } ?: RummikubBlinkDuration.Ten
-    }
-
-    fun saveRummikubBlinkDuration(context: Context, duration: RummikubBlinkDuration) {
-        preferences(context).edit().putString(KEY_RUMMIKUB_BLINK, duration.name).apply()
     }
 
     /** 마지막으로 연 앱 화면의 이름이다. 처음 켜면 null이다. */

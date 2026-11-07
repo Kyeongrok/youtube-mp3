@@ -48,7 +48,6 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!--  재생 중(상단): 재생/일시정지 + 현재 곡 이름 + 시간  -->
@@ -59,6 +58,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <!--  곡 제목 왼쪽의 작은 재생/일시정지 토글  -->
@@ -107,8 +107,21 @@
                 Foreground="#4CC2FF"
                 Text="{Binding CurrentName}"
                 TextTrimming="CharacterEllipsis" />
-            <TextBlock
+            <!--  반복 모드 토글: 곡 제목 바로 오른쪽  -->
+            <Button
                 Grid.Column="5"
+                Width="110"
+                Height="22"
+                Margin="8,0,8,0"
+                Padding="0"
+                VerticalAlignment="Center"
+                Command="{Binding ToggleRepeatModeCommand}"
+                Content="{Binding RepeatModeLabel}"
+                FontSize="11"
+                Style="{StaticResource SecondaryButtonStyle}"
+                ToolTip="클릭할 때마다 전체 반복 → 재생 후 정지 → 한 곡 반복 → 셔플 순으로 바뀝니다" />
+            <TextBlock
+                Grid.Column="6"
                 VerticalAlignment="Center"
                 FontSize="12"
                 Foreground="#AAAAAA">
@@ -137,7 +150,7 @@
         <ListBox
             x:Name="PlaylistBox"
             Grid.Row="2"
-            Margin="0,12,0,0"
+            Margin="0,4.2,0,0"
             AllowDrop="True"
             Background="#2D2D2D"
             BorderBrush="#3C3C3C"
@@ -159,12 +172,36 @@
                     <MenuItem Command="{Binding PlacementTarget.DataContext.OpenSelectedFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="파일 위치 열기" />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.RemoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="재생목록에서 제거" />
                     <Separator />
+                    <!--  반복 모드: 목록에서 바로 고를 수 있게. 현재 모드에 체크 표시  -->
+                    <MenuItem Header="반복 모드">
+                        <MenuItem
+                            Command="{Binding PlacementTarget.DataContext.SetRepeatModeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                            CommandParameter="RepeatAll"
+                            Header="🔁 전체 반복"
+                            IsChecked="{Binding PlacementTarget.DataContext.IsRepeatAll, Mode=OneWay, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        <MenuItem
+                            Command="{Binding PlacementTarget.DataContext.SetRepeatModeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                            CommandParameter="StopAfterList"
+                            Header="➡ 재생 후 정지"
+                            IsChecked="{Binding PlacementTarget.DataContext.IsStopAfterList, Mode=OneWay, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        <MenuItem
+                            Command="{Binding PlacementTarget.DataContext.SetRepeatModeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                            CommandParameter="RepeatOne"
+                            Header="🔂 한 곡 반복"
+                            IsChecked="{Binding PlacementTarget.DataContext.IsRepeatOne, Mode=OneWay, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        <MenuItem
+                            Command="{Binding PlacementTarget.DataContext.SetRepeatModeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                            CommandParameter="Shuffle"
+                            Header="🔀 셔플"
+                            IsChecked="{Binding PlacementTarget.DataContext.IsShuffle, Mode=OneWay, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    </MenuItem>
+                    <Separator />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.DeleteSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="파일 삭제(디스크에서 삭제)" />
                 </ContextMenu>
             </ListBox.ContextMenu>
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
-                    <Setter Property="Padding" Value="8,6" />
+                    <Setter Property="Padding" Value="4,3" />
                     <Setter Property="Background" Value="Transparent" />
                     <Setter Property="BorderThickness" Value="0,0,0,1" />
                     <Setter Property="BorderBrush" Value="#3C3C3C" />
@@ -172,11 +209,24 @@
                         <Setter.Value>
                             <ControlTemplate TargetType="ListBoxItem">
                                 <Border
-                                    Padding="{TemplateBinding Padding}"
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}">
-                                    <ContentPresenter />
+                                    <Grid ClipToBounds="True">
+                                        <!--  더블클릭(재생)한 지점에서 퍼지는 물결. 위치·크기는 코드비하인드에서 잡는다.
+                                              Canvas에 담아 두면 원의 위치·크기가 행 높이에 영향을 주지 않는다.  -->
+                                        <Canvas>
+                                            <Ellipse
+                                                x:Name="Ripple"
+                                                Width="20"
+                                                Height="20"
+                                                Fill="White"
+                                                IsHitTestVisible="False"
+                                                Opacity="0"
+                                                RenderTransformOrigin="0.5,0.5" />
+                                        </Canvas>
+                                        <ContentPresenter Margin="{TemplateBinding Padding}" />
+                                    </Grid>
                                 </Border>
                             </ControlTemplate>
                         </Setter.Value>
@@ -248,23 +298,9 @@
             </TextBlock.Style>
         </TextBlock>
 
-        <!--  재생 컨트롤  -->
-        <StackPanel
-            Grid.Row="3"
-            Margin="0,12,0,0"
-            Orientation="Horizontal">
-            <!--  재생·정지·이전·다음은 곡 제목 줄로 올렸다  -->
-            <Button
-                Width="120"
-                Height="36"
-                Command="{Binding ToggleRepeatModeCommand}"
-                Content="{Binding RepeatModeLabel}"
-                Style="{StaticResource SecondaryButtonStyle}"
-                ToolTip="클릭할 때마다 전체 반복 → 재생 후 정지 → 한 곡 반복 → 셔플 순으로 바뀝니다" />
-        </StackPanel>
-
+        <!--  재생·정지·이전·다음·반복은 모두 곡 제목 줄로 올렸다  -->
         <TextBlock
-            Grid.Row="4"
+            Grid.Row="3"
             Margin="0,8,0,0"
             FontSize="12"
             Foreground="#CCCCCC"

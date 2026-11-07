@@ -836,6 +836,11 @@ private fun NowPlayingSheet(onDismiss: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("지금 재생 중", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            // 누를 때마다 전체 반복 → 재생 후 정지 → 한 곡 반복 → 셔플 순으로 바뀐다.
+            val context = LocalContext.current
+            TextButton(onClick = { Player.cycleRepeatMode(context) }) {
+                Text(state.repeatMode.label)
+            }
             if (state.queueSize > 0) {
                 Text("${state.queueIndex + 1} / ${state.queueSize}", color = colors.onSurfaceVariant)
             }

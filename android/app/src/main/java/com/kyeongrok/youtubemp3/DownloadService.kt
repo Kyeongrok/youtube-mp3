@@ -3,9 +3,11 @@ package com.kyeongrok.youtubemp3
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -97,10 +99,11 @@ class DownloadService : Service() {
                 Downloads.change(item.id) { it.copy(progress = percent / 100f, message = message) }
                 updateNotification(notification(item.title, percent.toInt()))
             }
-            Library.save(this, file)
+            val uri = Library.save(this, file)
             Downloads.change(item.id) {
                 it.copy(status = DownloadStatus.Done, progress = 1f, title = file.nameWithoutExtension, message = "완료")
             }
+            playNow(uri, file.nameWithoutExtension)
         } catch (e: YoutubeDL.CanceledException) {
             Downloads.change(item.id) { it.copy(status = DownloadStatus.Canceled, message = "취소됨") }
         } catch (e: Exception) {
@@ -108,6 +111,18 @@ class DownloadService : Service() {
             Downloads.change(item.id) { it.copy(status = DownloadStatus.Failed, message = reason ?: "오류 발생") }
         } finally {
             workDirectory.deleteRecursively()
+        }
+    }
+
+    /** 추출이 끝난 곡을 바로 튼다. 내 음악 목록을 재생 순서로 넣어 그다음 곡으로도 이어지게 한다. */
+    private fun playNow(uri: Uri, title: String) {
+        try {
+            val id = ContentUris.parseId(uri)
+            val tracks = Library.list(this)
+            val index = tracks.indexOfFirst { it.id == id }
+            if (index >= 0) Player.play(this, tracks, index) else Player.play(this, Track(id, title, uri))
+        } catch (_: Exception) {
+            // 재생에 실패해도 다운로드 결과는 그대로 둔다.
         }
     }
 

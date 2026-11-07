@@ -29,7 +29,9 @@ public sealed class YoutubeService : IYoutubeService
             YoutubeDLPath = ToolPaths.YtDlp,
             FFmpegPath = ToolPaths.FFmpeg,
             OutputFolder = _binaryDirectory,
-            RestrictFilenames = true,
+            // true면 yt-dlp가 파일명을 ASCII로만 만들어 한글 제목이 "_"로 뭉개진다.
+            // Windows 금지 문자(\ / : * ? " < > |)는 yt-dlp가 알아서 치환하므로 끄기만 하면 된다.
+            RestrictFilenames = false,
         };
     }
 

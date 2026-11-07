@@ -144,7 +144,27 @@ public partial class PlayerViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RepeatModeLabel))]
+    [NotifyPropertyChangedFor(nameof(IsRepeatAll))]
+    [NotifyPropertyChangedFor(nameof(IsStopAfterList))]
+    [NotifyPropertyChangedFor(nameof(IsRepeatOne))]
+    [NotifyPropertyChangedFor(nameof(IsShuffle))]
     private RepeatMode _repeatMode = RepeatMode.RepeatAll;
+
+    // 재생목록 우클릭 메뉴의 반복 모드 체크 표시용.
+    public bool IsRepeatAll => RepeatMode == RepeatMode.RepeatAll;
+    public bool IsStopAfterList => RepeatMode == RepeatMode.StopAfterList;
+    public bool IsRepeatOne => RepeatMode == RepeatMode.RepeatOne;
+    public bool IsShuffle => RepeatMode == RepeatMode.Shuffle;
+
+    /// <summary>재생목록 우클릭 메뉴에서 반복 모드를 직접 고른다(XAML에서 enum 이름 문자열로 넘어온다).</summary>
+    [RelayCommand]
+    private void SetRepeatMode(string? mode)
+    {
+        if (!Enum.TryParse<RepeatMode>(mode, out var parsed))
+            return;
+        RepeatMode = parsed;
+        SaveRepeatMode();
+    }
 
     public string PlayPauseLabel => IsPlaying ? "❚❚ 일시정지" : "▶ 재생";
 
@@ -206,6 +226,15 @@ public partial class PlayerViewModel : ObservableObject
             SavePlaylist();
             Status = $"{added}곡 추가됨 · 총 {Playlist.Count}곡";
         }
+    }
+
+    /// <summary>파일을 재생목록에 넣고(이미 있으면 그 항목을) 바로 재생한다.</summary>
+    public void AddAndPlay(string path)
+    {
+        AddFiles(new[] { path });
+        var item = Playlist.FirstOrDefault(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase));
+        if (item is not null)
+            PlayItem(item);
     }
 
     /// <summary>드래그로 순서를 바꾼다. target이 null이면 맨 끝으로 이동한다.</summary>

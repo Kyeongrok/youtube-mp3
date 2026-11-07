@@ -1,13 +1,18 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using YoutubeMp3.Forms.ViewModels;
 
 namespace YoutubeMp3.Forms.UI.Views;
 
 public partial class PlayerView : UserControl
 {
+    // 물결(ripple) 원의 기본 반지름. 클릭 지점에서 이만큼 크기로 시작해 행 전체를 덮을 때까지 커진다.
+    private const double RippleRadius = 10;
+
     private Point _dragStart;
     private PlaylistItem? _dragItem;
 
@@ -86,8 +91,40 @@ public partial class PlayerView : UserControl
 
     private void OnItemDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (DataContext is PlayerViewModel viewModel && viewModel.SelectedItem is not null)
-            viewModel.PlayItemCommand.Execute(viewModel.SelectedItem);
+        if (DataContext is not PlayerViewModel viewModel || viewModel.SelectedItem is null)
+            return;
+
+        if (ContainerFromElement(e.OriginalSource as DependencyObject) is { } container)
+            PlayRipple(container, e.GetPosition(container));
+
+        viewModel.PlayItemCommand.Execute(viewModel.SelectedItem);
+    }
+
+    // 클릭한 지점에서 원이 퍼지며 사라진다(머티리얼 ripple). 재생이 시작됐다는 즉각적인 반응.
+    private static void PlayRipple(ListBoxItem container, Point center)
+    {
+        if (container.Template?.FindName("Ripple", container) is not Ellipse ripple)
+            return;
+
+        // 템플릿 안에 둔 Freezable은 얼어 있어 애니메이션을 걸 수 없다. 매번 새 변환을 붙인다.
+        var scale = new ScaleTransform(0, 0);
+        ripple.RenderTransform = scale;
+
+        Canvas.SetLeft(ripple, center.X - RippleRadius);
+        Canvas.SetTop(ripple, center.Y - RippleRadius);
+
+        // 클릭 지점에서 가장 먼 모서리까지 덮을 만큼 키운다.
+        var dx = Math.Max(center.X, container.ActualWidth - center.X);
+        var dy = Math.Max(center.Y, container.ActualHeight - center.Y);
+        var target = Math.Sqrt((dx * dx) + (dy * dy)) / RippleRadius;
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(900));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var grow = new DoubleAnimation(0, target, duration) { EasingFunction = ease };
+
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        ripple.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0.35, 0, duration) { EasingFunction = ease });
     }
 
     // ── 진행바 탐색: 잡고 있는 동안 타이머가 위치를 덮어쓰지 않게 ──
@@ -106,11 +143,14 @@ public partial class PlayerView : UserControl
 
     // ── 헬퍼 ─────────────────────────────────────────────────────
 
-    private static PlaylistItem? ItemFromElement(DependencyObject? source)
+    private static PlaylistItem? ItemFromElement(DependencyObject? source) =>
+        ContainerFromElement(source)?.DataContext as PlaylistItem;
+
+    private static ListBoxItem? ContainerFromElement(DependencyObject? source)
     {
         while (source is not null and not ListBoxItem)
             source = VisualTreeHelper.GetParent(source);
-        return (source as ListBoxItem)?.DataContext as PlaylistItem;
+        return source as ListBoxItem;
     }
 
     private PlaylistItem? ItemUnderPoint(Point point)

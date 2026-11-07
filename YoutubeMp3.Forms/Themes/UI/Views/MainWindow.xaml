@@ -15,7 +15,8 @@
         <Setter Property="Width" Value="800" />
         <Setter Property="Height" Value="600" />
         <Setter Property="MinWidth" Value="400" />
-        <Setter Property="MinHeight" Value="300" />
+        <!--  재생목록이 20곡은 보이도록 잡은 최소 높이  -->
+        <Setter Property="MinHeight" Value="660" />
         <Setter Property="WindowStyle" Value="None" />
         <!--  앱 이름·버전은 햄버거 메뉴 맨 위에 표시한다  -->
         <Setter Property="ShowTitleText" Value="False" />
@@ -27,69 +28,8 @@
             </Setter.Value>
         </Setter>
 
-        <!--  타이틀바 가운데 내비게이션 버튼들 (각자 개별 화면으로 이동)  -->
-        <Setter Property="TitleBarContent">
-            <Setter.Value>
-                <StackPanel Orientation="Horizontal">
-                    <Button
-                        Width="130"
-                        Height="26"
-                        VerticalAlignment="Center"
-                        Command="{Binding ShowExtractionCommand}"
-                        Content="Youtube Mp3 추출"
-                        WindowChrome.IsHitTestVisibleInChrome="True">
-                        <Button.Style>
-                            <Style BasedOn="{StaticResource SecondaryButtonStyle}" TargetType="Button">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsExtractionActive}" Value="True">
-                                        <Setter Property="Background" Value="#0078D4" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                    <!--  데시벨 조정은 왼쪽 햄버거 메뉴로 옮겼다  -->
-                    <Button
-                        Width="90"
-                        Height="26"
-                        Margin="8,0,0,0"
-                        VerticalAlignment="Center"
-                        Command="{Binding ShowPlayerCommand}"
-                        Content="플레이어"
-                        WindowChrome.IsHitTestVisibleInChrome="True">
-                        <Button.Style>
-                            <Style BasedOn="{StaticResource SecondaryButtonStyle}" TargetType="Button">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsPlayerActive}" Value="True">
-                                        <Setter Property="Background" Value="#0078D4" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                    <!--  폰으로 전송은 왼쪽 햄버거 메뉴로 옮겼다  -->
-                    <!--  재생 조작: 플레이어 화면이 아니어도 쓸 수 있도록 타이틀바에 둔다  -->
-                    <Button
-                        Width="96"
-                        Height="26"
-                        Margin="24,0,0,0"
-                        VerticalAlignment="Center"
-                        Command="{Binding Player.PlayPauseCommand}"
-                        Content="{Binding Player.PlayPauseLabel}"
-                        Style="{StaticResource AccentButtonStyle}"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-                    <Button
-                        Width="72"
-                        Height="26"
-                        Margin="8,0,0,0"
-                        VerticalAlignment="Center"
-                        Command="{Binding Player.StopCommand}"
-                        Content="■ 정지"
-                        Style="{StaticResource SecondaryButtonStyle}"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-                </StackPanel>
-            </Setter.Value>
-        </Setter>
+        <!--  화면 이동 버튼은 모두 왼쪽 햄버거 메뉴로, 재생·정지는 플레이어 화면의 곡 제목 줄로 옮겼다.
+              그래서 타이틀바 가운데는 비워 둔다.  -->
 
         <!--  본문: LazyRegion으로 추출/데시벨 화면을 애니메이션 전환  -->
         <Setter Property="Content">

@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using YoutubeMp3.Forms;
@@ -29,8 +29,8 @@ public class App : Application
         AppServices.Current = _host.Services;
 
         var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
-        mainWindow.Width = 1000;
-        mainWindow.Height = 300;
+        mainWindow.Width = 700;
+        mainWindow.Height = 660;
         mainWindow.Show();
     }
 

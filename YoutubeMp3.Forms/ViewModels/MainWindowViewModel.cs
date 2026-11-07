@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -93,17 +93,17 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsPlayerActive => ReferenceEquals(CurrentPage, _playerPage);
     public bool IsFileTransferActive => ReferenceEquals(CurrentPage, _fileTransferPage);
 
-    /// <summary>뷰가 만든 페이지들을 받아 초기 화면(추출)을 세팅한다.</summary>
+    /// <summary>뷰가 만든 페이지들을 받아 초기 화면(플레이어)을 세팅한다.</summary>
     public void InitializePages(object extractionPage, object volumePage, object playerPage, object fileTransferPage)
     {
         _extractionPage = extractionPage;
         _volumePage = volumePage;
         _playerPage = playerPage;
         _fileTransferPage = fileTransferPage;
-        CurrentPage = _extractionPage;
+        CurrentPage = _playerPage;
     }
 
-    /// <summary>타이틀바의 재생·정지 버튼이 바인딩하는 플레이어. 어느 화면에 있든 재생을 조작할 수 있다.</summary>
+    /// <summary>플레이어 화면의 재생 조작이 바인딩하는 뷰모델. 화면을 옮겨 다녀도 같은 인스턴스를 쓴다.</summary>
     public PlayerViewModel Player => _playerViewModel;
 
     /// <summary>설정 값이 바뀌면 발생한다. 창 크기처럼 뷰가 직접 적용해야 하는 설정이 있어 알려 준다.</summary>
@@ -318,7 +318,8 @@ public partial class MainWindowViewModel : ObservableObject
                     ProgressPercentage = 100;
                     Status = $"완료: {Path.GetFileName(filePath)}";
                     LastDownloadedFilePath = filePath;
-                    _playerViewModel.AddFiles(new[] { filePath });
+                    // 추출이 끝나면 재생목록에 넣고 바로 재생한다.
+                    _playerViewModel.AddAndPlay(filePath);
                 }
                 catch (Exception ex)
                 {

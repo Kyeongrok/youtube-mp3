@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="YoutubeMp3.Forms.UI.Views.AppMenuButton"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -33,6 +33,8 @@
                     Foreground="#888888"
                     IsHitTestVisible="False" />
                 <Separator />
+                <MenuItem Command="{Binding ShowPlayerCommand}" Header="플레이어" />
+                <MenuItem Command="{Binding ShowExtractionCommand}" Header="Youtube Mp3 추출" />
                 <MenuItem Command="{Binding ShowVolumeCommand}" Header="데시벨 조정" />
                 <!--  같은 Wi-Fi의 휴대폰으로 mp3를 QR 코드로 전송  -->
                 <MenuItem Command="{Binding ShowFileTransferCommand}" Header="📱 폰으로 전송" />

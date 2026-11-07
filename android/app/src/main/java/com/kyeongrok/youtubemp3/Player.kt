@@ -21,14 +21,46 @@ data class PlayerState(
     val queueSize: Int = 0,
     /** 지금 재생 순서대로 늘어놓은 곡들이다. 재생목록이든 내 음악이든 튼 곳의 목록이 그대로 들어온다. */
     val queue: List<Track> = emptyList(),
+    val repeatMode: RepeatMode = RepeatMode.StopAfterList,
 )
 
+/** 곡이 끝났을 때 다음에 무엇을 할지. PC 앱과 같은 네 가지이고 [Player.cycleRepeatMode]로 이 순서대로 돈다. */
+enum class RepeatMode(val label: String) {
+    RepeatAll("🔁 전체 반복"),
+    StopAfterList("➡ 재생 후 정지"),
+    RepeatOne("🔂 한 곡 반복"),
+    Shuffle("🔀 셔플"),
+}
+
 object Player {
+    private const val PREFS = "player"
+    private const val KEY_REPEAT_MODE = "repeatMode"
+
     private var mediaPlayer: MediaPlayer? = null
     private var appContext: Context? = null
     private var queue = emptyList<Track>()
+    private var repeatMode = RepeatMode.StopAfterList
+    private var repeatModeLoaded = false
     private val mutableState = MutableStateFlow(PlayerState())
     val state = mutableState.asStateFlow()
+
+    /** 저장해 둔 반복 모드를 한 번만 읽어 온다. 다음 실행 때도 마지막으로 고른 모드를 그대로 쓴다. */
+    private fun loadRepeatMode(context: Context) {
+        if (repeatModeLoaded) return
+        repeatModeLoaded = true
+        val saved = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_REPEAT_MODE, null)
+        repeatMode = RepeatMode.entries.firstOrNull { it.name == saved } ?: RepeatMode.StopAfterList
+        mutableState.value = mutableState.value.copy(repeatMode = repeatMode)
+    }
+
+    /** 전체 반복 → 재생 후 정지 → 한 곡 반복 → 셔플 순으로 바꾸고 저장한다. */
+    fun cycleRepeatMode(context: Context) {
+        loadRepeatMode(context)
+        repeatMode = RepeatMode.entries[(repeatMode.ordinal + 1) % RepeatMode.entries.size]
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_REPEAT_MODE, repeatMode.name).apply()
+        mutableState.value = mutableState.value.copy(repeatMode = repeatMode)
+    }
 
     private val attributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -84,6 +116,7 @@ object Player {
 
     fun play(context: Context, tracks: List<Track>, index: Int) {
         appContext = context.applicationContext
+        loadRepeatMode(context.applicationContext)
         queue = tracks
         playFrom(index)
         if (mediaPlayer != null) PlaybackService.start(context)
@@ -144,18 +177,29 @@ object Player {
                 queueIndex = position,
                 queueSize = queue.size,
                 queue = queue,
+                repeatMode = repeatMode,
             )
             return
         }
-        mutableState.value = PlayerState()
+        mutableState.value = PlayerState(repeatMode = repeatMode)
     }
 
+    /** 곡이 끝까지 재생되면 반복 모드에 따라 다음 곡을 고른다. */
     private fun onCompleted(position: Int) {
-        if (position + 1 < queue.size) {
-            playFrom(position + 1)
-        } else {
-            mutableState.value = mutableState.value.copy(isPlaying = false, positionMs = 0)
-            abandonFocus()
+        if (queue.isEmpty()) return
+        when (repeatMode) {
+            RepeatMode.RepeatOne -> playFrom(position)
+            RepeatMode.RepeatAll -> playFrom((position + 1) % queue.size)
+            RepeatMode.Shuffle -> {
+                val next = if (queue.size == 1) 0 else queue.indices.filter { it != position }.random()
+                playFrom(next)
+            }
+            RepeatMode.StopAfterList -> if (position + 1 < queue.size) {
+                playFrom(position + 1)
+            } else {
+                mutableState.value = mutableState.value.copy(isPlaying = false, positionMs = 0)
+                abandonFocus()
+            }
         }
     }
 
@@ -182,7 +226,7 @@ object Player {
         abandonFocus()
         resumeOnGain = false
         queue = emptyList()
-        mutableState.value = PlayerState()
+        mutableState.value = PlayerState(repeatMode = repeatMode)
     }
 
     /** 지금 위치에서 deltaMs만큼 앞뒤로 옮긴다. 곡의 처음과 끝을 넘지 않는다. */

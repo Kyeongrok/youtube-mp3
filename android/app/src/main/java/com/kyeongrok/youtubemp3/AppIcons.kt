@@ -64,46 +64,6 @@ object AppIcons {
         }
     }
 
-    /** 대문자 A와 작은 a. */
-    val Alphabet: ImageVector = materialIcon("App.Alphabet") {
-        materialPath(pathFillType = PathFillType.EvenOdd) {
-            moveTo(2f, 20f); lineTo(7.5f, 4f); horizontalLineToRelative(2.2f); lineTo(15.2f, 20f)
-            horizontalLineToRelative(-2.3f); lineToRelative(-1.3f, -4f); horizontalLineToRelative(-5.2f)
-            lineToRelative(-1.3f, 4f); close()
-            moveTo(7f, 14f); horizontalLineToRelative(4f); lineTo(9f, 7.8f); close()
-        }
-        materialPath(pathFillType = PathFillType.EvenOdd) {
-            moveTo(18.5f, 13f)
-            arcToRelative(3f, 3f, 0f, true, true, 0f, 6f)
-            arcToRelative(3f, 3f, 0f, true, true, 0f, -6f)
-            close()
-            moveTo(18.5f, 14.6f)
-            arcToRelative(1.4f, 1.4f, 0f, true, false, 0f, 2.8f)
-            arcToRelative(1.4f, 1.4f, 0f, true, false, 0f, -2.8f)
-            close()
-        }
-        materialPath {
-            moveTo(20.8f, 13f); horizontalLineToRelative(1.5f); verticalLineToRelative(7f); horizontalLineToRelative(-1.5f); close()
-        }
-    }
-
-    /** 네모 칸 안의 숫자 12. */
-    val Numbers: ImageVector = materialIcon("App.Numbers") {
-        materialPath(pathFillType = PathFillType.EvenOdd) {
-            moveTo(3f, 3f); horizontalLineToRelative(18f); verticalLineToRelative(18f); horizontalLineTo(3f); close()
-            moveTo(5f, 5f); verticalLineToRelative(14f); horizontalLineToRelative(14f); verticalLineTo(5f); close()
-        }
-        materialPath {
-            // 1
-            moveTo(7f, 8.5f); lineTo(9.5f, 7f); horizontalLineToRelative(1.5f); verticalLineToRelative(10f)
-            horizontalLineToRelative(-2f); verticalLineTo(9.4f); lineTo(7f, 10.5f); close()
-            // 2
-            moveTo(12.5f, 7f); horizontalLineToRelative(5f); verticalLineToRelative(5.5f); horizontalLineToRelative(-3f)
-            verticalLineToRelative(2.5f); horizontalLineToRelative(3f); verticalLineToRelative(2f); horizontalLineToRelative(-5f)
-            verticalLineToRelative(-5.5f); horizontalLineToRelative(3f); verticalLineTo(9f); horizontalLineToRelative(-3f); close()
-        }
-    }
-
     /** 태극 모양. 바깥 테 안에 어두운 반쪽과 점 하나를 그린다. */
     val Saju: ImageVector = materialIcon("App.Saju") {
         materialPath(pathFillType = PathFillType.EvenOdd) {
@@ -126,16 +86,6 @@ object AppIcons {
             arcToRelative(1.2f, 1.2f, 0f, true, true, 0f, 2.4f)
             arcToRelative(1.2f, 1.2f, 0f, true, true, 0f, -2.4f)
             close()
-        }
-    }
-
-    /** 네모난 획으로 쓴 「가」. */
-    val Hangul: ImageVector = materialIcon("App.Hangul") {
-        materialPath {
-            moveTo(2.5f, 5f); horizontalLineTo(12f); verticalLineTo(19f); horizontalLineTo(9.5f)
-            verticalLineTo(7.5f); horizontalLineTo(2.5f); close()
-            moveTo(15f, 3f); horizontalLineToRelative(2.5f); verticalLineToRelative(18f); horizontalLineTo(15f); close()
-            moveTo(17.5f, 10.8f); horizontalLineTo(21.5f); verticalLineToRelative(2.4f); horizontalLineTo(17.5f); close()
         }
     }
 }

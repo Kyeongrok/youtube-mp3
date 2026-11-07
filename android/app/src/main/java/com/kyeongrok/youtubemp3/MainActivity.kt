@@ -132,15 +132,12 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 internal val ListPadding = PaddingValues(bottom = 16.dp)
 
 /** 앱 안의 화면들이다. None은 음악(YoutubeMp3) 화면이고 Home은 앱을 고르는 첫 화면이다. */
-private enum class MiniGame { Home, None, Saju, Hangul, Numbers, Alphabet }
+private enum class MiniGame { Home, None, Saju }
 
 private class AppEntry(val label: String, val icon: ImageVector, val target: MiniGame)
 
 private val GAME_ENTRIES = listOf(
     AppEntry("사주", AppIcons.Saju, MiniGame.Saju),
-    AppEntry("한글 배우기", AppIcons.Hangul, MiniGame.Hangul),
-    AppEntry("숫자 공부", AppIcons.Numbers, MiniGame.Numbers),
-    AppEntry("알파벳", AppIcons.Alphabet, MiniGame.Alphabet),
 )
 
 private val APP_ENTRIES = listOf(AppEntry("음악", AppIcons.Music, MiniGame.None)) + GAME_ENTRIES
@@ -354,9 +351,6 @@ private fun MainScreen(viewModel: MainViewModel) {
         topBar = {
             when (game) {
                 MiniGame.Saju -> SajuTopBar(onBack = { game = MiniGame.Home })
-                MiniGame.Hangul -> HangulTopBar(onBack = { game = MiniGame.Home })
-                MiniGame.Numbers -> NumberTopBar(onBack = { game = MiniGame.Home })
-                MiniGame.Alphabet -> AlphabetTopBar(onBack = { game = MiniGame.Home })
                 MiniGame.Home -> TopAppBar(
                     title = { AppTitle() },
                     actions = {
@@ -394,15 +388,8 @@ private fun MainScreen(viewModel: MainViewModel) {
             )
             return@Scaffold
         }
-        if (game != MiniGame.None) {
-            Column(Modifier.padding(padding).fillMaxSize()) {
-                when (game) {
-                    MiniGame.Saju -> SajuScreen(viewModel)
-                    MiniGame.Hangul -> HangulScreen()
-                    MiniGame.Numbers -> NumberScreen()
-                    else -> AlphabetScreen()
-                }
-            }
+        if (game == MiniGame.Saju) {
+            Column(Modifier.padding(padding).fillMaxSize()) { SajuScreen(viewModel) }
             return@Scaffold
         }
         Column(Modifier.padding(padding).fillMaxSize()) {

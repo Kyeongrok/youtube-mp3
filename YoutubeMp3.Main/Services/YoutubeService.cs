@@ -86,13 +86,46 @@ public sealed class YoutubeService : IYoutubeService
         if (!string.IsNullOrEmpty(audioQuality))
             options.AddCustomOption("--audio-quality", audioQuality);
 
+        var startedAt = DateTime.Now.AddSeconds(-5);
         var result = await _youtubeDl.RunAudioDownload(
             url, AudioConversionFormat.Mp3, ct, ytProgress, overrideOptions: options);
 
         if (!result.Success)
             throw new InvalidOperationException(string.Join(Environment.NewLine, result.ErrorOutput));
 
-        return result.Data;
+        return ResolveDownloadedFile(result.Data, outputDirectory, startedAt);
+    }
+
+    // yt-dlp가 알려 주는 경로는 한글 제목이면 인코딩이 깨져 실제 파일과 다를 수 있다.
+    // 그러면 재생목록 추가·바로 재생이 조용히 실패하므로, 파일명에 붙는 [영상ID](ASCII라 깨지지 않음)로
+    // 출력 폴더에서 진짜 파일을 찾고, 그것도 안 되면 이번에 만들어진 가장 최근 mp3를 쓴다.
+    private static string ResolveDownloadedFile(string reportedPath, string outputDirectory, DateTime startedAt)
+    {
+        if (!string.IsNullOrEmpty(reportedPath) && File.Exists(reportedPath))
+            return reportedPath;
+
+        var mp3s = new DirectoryInfo(outputDirectory).GetFiles("*.mp3");
+
+        var id = string.IsNullOrEmpty(reportedPath)
+            ? null
+            : System.Text.RegularExpressions.Regex.Match(reportedPath, @"\[([A-Za-z0-9_-]{11})\]") is { Success: true } m
+                ? m.Groups[1].Value
+                : null;
+        if (id is not null)
+        {
+            var byId = mp3s
+                .Where(f => f.Name.Contains($"[{id}]", StringComparison.Ordinal))
+                .OrderByDescending(f => f.LastWriteTime)
+                .FirstOrDefault();
+            if (byId is not null)
+                return byId.FullName;
+        }
+
+        var newest = mp3s
+            .Where(f => f.LastWriteTime >= startedAt)
+            .OrderByDescending(f => f.LastWriteTime)
+            .FirstOrDefault();
+        return newest?.FullName ?? reportedPath;
     }
 
     // yt-dlp requires a JS runtime to extract from YouTube; point it at the deno

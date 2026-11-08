@@ -192,6 +192,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock
                 Grid.Column="0"
@@ -204,9 +205,18 @@
                 Grid.Column="1"
                 Style="{StaticResource DarkTextBoxStyle}"
                 Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}" />
+            <!--  클립보드에 복사해 둔 주소를 URL 칸에 바로 붙여넣는다  -->
+            <Button
+                Grid.Column="2"
+                Width="80"
+                Margin="8,0,0,0"
+                Command="{Binding PasteUrlCommand}"
+                Content="📋 붙여넣기"
+                Style="{StaticResource SecondaryButtonStyle}"
+                ToolTip="클립보드의 주소를 URL 칸에 붙여넣습니다" />
             <!--  MP3 추출 음질(비트레이트)  -->
             <ComboBox
-                Grid.Column="2"
+                Grid.Column="3"
                 Width="80"
                 Margin="8,0,0,0"
                 ItemsSource="{Binding AudioQualityOptions}"
@@ -214,7 +224,7 @@
                 Style="{StaticResource DarkComboBoxStyle}"
                 ToolTip="MP3 추출 음질" />
             <Button
-                Grid.Column="3"
+                Grid.Column="4"
                 Width="100"
                 Margin="8,0,0,0"
                 Command="{Binding DownloadCommand}"

@@ -278,6 +278,27 @@ public partial class MainWindowViewModel : ObservableObject
 
     private bool CanDownload() => !string.IsNullOrWhiteSpace(Url);
 
+    /// <summary>클립보드의 텍스트(주소)를 URL 칸에 붙여넣는다. 앞뒤 공백·줄바꿈은 걷어 낸다.</summary>
+    [RelayCommand]
+    private void PasteUrl()
+    {
+        try
+        {
+            if (!Clipboard.ContainsText())
+            {
+                Status = "클립보드에 붙여넣을 주소가 없습니다";
+                return;
+            }
+
+            Url = Clipboard.GetText().Trim();
+        }
+        catch (Exception ex)
+        {
+            // 다른 프로그램이 클립보드를 잡고 있으면 실패할 수 있다.
+            Status = $"붙여넣기 실패: {ex.Message}";
+        }
+    }
+
     // 다운로드 중에도 버튼을 막지 않고 대기열에 쌓아, 처리 중인 항목이 끝나는 대로 이어서 추출한다.
     [RelayCommand(CanExecute = nameof(CanDownload))]
     private void Download()

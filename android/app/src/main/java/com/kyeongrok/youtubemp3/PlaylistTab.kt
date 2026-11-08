@@ -80,6 +80,15 @@ private val AUDIO_PERMISSION =
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
+// 음악 권한과 함께 동영상 권한도 묻는다. 브라우저로 받은 m4a가 동영상으로 분류된 경우가 있어서다.
+// 안드로이드 12 이하는 READ_EXTERNAL_STORAGE 하나로 둘 다 읽힌다.
+private val MEDIA_PERMISSIONS =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_VIDEO)
+    } else {
+        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
 // 사용자 재생목록 ID는 시각 값이라 겹치지 않는다.
 private const val RECENT_ID = -1L
 private const val RECENT_LIMIT = 50
@@ -87,21 +96,35 @@ private const val RECENT_LIMIT = 50
 private fun hasAudioPermission(context: Context) =
     context.checkSelfPermission(AUDIO_PERMISSION) == PackageManager.PERMISSION_GRANTED
 
+private fun hasAllMediaPermissions(context: Context) =
+    MEDIA_PERMISSIONS.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+
 /** 기기 음악을 읽을 권한이 없으면 허용 버튼을 보여 주고, 화면에 돌아올 때마다(설정에서 켜고 온 경우 포함) 목록을 다시 읽는다. */
 @Composable
 fun AudioPermissionBar(viewModel: MainViewModel) {
     val context = LocalContext.current
     var canRead by remember { mutableStateOf(hasAudioPermission(context)) }
     var denied by remember { mutableStateOf(false) }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    // 동영상 권한만 아직 없으면(이전 버전에서 음악 권한만 준 경우) 한 번 더 물어볼 수 있게 버튼을 보여 준다.
+    var needsVideo by remember { mutableStateOf(!hasAllMediaPermissions(context)) }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        val granted = hasAudioPermission(context)
         canRead = granted
         denied = !granted
+        needsVideo = !hasAllMediaPermissions(context)
         if (granted) viewModel.refreshDeviceTracks()
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         canRead = hasAudioPermission(context)
+        needsVideo = !hasAllMediaPermissions(context)
         viewModel.refreshDeviceTracks()
+    }
+
+    if (canRead && needsVideo && !denied) {
+        TextButton(onClick = { permission.launch(MEDIA_PERMISSIONS) }, modifier = Modifier.fillMaxWidth()) {
+            Text("브라우저로 받은 m4a도 보이게 하려면 동영상 접근 허용하기")
+        }
     }
 
     if (!canRead) {
@@ -116,7 +139,7 @@ fun AudioPermissionBar(viewModel: MainViewModel) {
                         ),
                     )
                 } else {
-                    permission.launch(AUDIO_PERMISSION)
+                    permission.launch(MEDIA_PERMISSIONS)
                 }
             },
             modifier = Modifier.fillMaxWidth(),

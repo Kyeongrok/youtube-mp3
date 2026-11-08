@@ -159,6 +159,49 @@ object Library {
                 )
             }
         }
+        tracks += listAudioFilesClassifiedAsVideo(context, tracks.mapTo(HashSet()) { it.id })
+        return tracks.sortedBy { it.title.lowercase() }
+    }
+
+    /** "곡.m4a" 또는 "곡.m4a.mp4"처럼 이름은 오디오인데 동영상으로 분류된 파일. */
+    private val AUDIO_NAMED = Regex("\\.(m4a|aac|mp3|opus|ogg|flac|wav)(\\.mp4)?$", RegexOption.IGNORE_CASE)
+
+    /**
+     * 브라우저가 m4a를 video/mp4로 받으면 시스템은 이름 끝에 .mp4를 붙여 동영상으로 분류한다.
+     * 오디오 목록에는 안 나오므로 동영상 목록에서 이름이 오디오인 것만 골라 음악으로 보여 준다.
+     * 동영상 권한이 없으면 아무것도 나오지 않는다(오류 없이 빈 결과).
+     */
+    private fun listAudioFilesClassifiedAsVideo(context: Context, known: Set<Long>): List<Track> {
+        val videos = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(
+            MediaStore.MediaColumns._ID,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.DATE_ADDED,
+            MediaStore.MediaColumns.RELATIVE_PATH,
+            MediaStore.MediaColumns.DURATION,
+        )
+        val tracks = mutableListOf<Track>()
+        try {
+            context.contentResolver.query(videos, projection, null, null, null)?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val name = cursor.getString(1).orEmpty()
+                    val match = AUDIO_NAMED.find(name) ?: continue
+                    if (id in known) continue
+                    tracks += Track(
+                        id,
+                        name.removeRange(match.range).ifBlank { name },
+                        ContentUris.withAppendedId(videos, id),
+                        cursor.getLong(2),
+                        isRecording = false,
+                        durationMs = cursor.getLong(4),
+                        folder = cursor.getString(3).orEmpty(),
+                    )
+                }
+            }
+        } catch (_: SecurityException) {
+            // 권한이 없으면 건너뛴다.
+        }
         return tracks
     }
 
@@ -169,8 +212,11 @@ object Library {
     @Suppress("DEPRECATION")
     suspend fun scanStorage(context: Context): Int = withContext(Dispatchers.IO) {
         val known = HashSet<String>()
-        context.contentResolver.query(COLLECTION, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)
-            ?.use { cursor -> while (cursor.moveToNext()) cursor.getString(0)?.let(known::add) }
+        // 동영상으로 분류된 m4a도 이미 시스템에 올라와 있으니 매번 "새 파일"로 세지 않게 같이 담는다.
+        for (collection in listOf(COLLECTION, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)) {
+            context.contentResolver.query(collection, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)
+                ?.use { cursor -> while (cursor.moveToNext()) cursor.getString(0)?.let(known::add) }
+        }
 
         val found = mutableListOf<String>()
         fun walk(dir: File, depth: Int) {

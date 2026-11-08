@@ -193,6 +193,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock
                 Grid.Column="0"
@@ -230,6 +231,15 @@
                 Command="{Binding DownloadCommand}"
                 Content="MP3 추출"
                 Style="{StaticResource AccentButtonStyle}" />
+            <!--  클립보드 주소를 붙여넣고 곧바로 추출까지 한 번에  -->
+            <Button
+                Grid.Column="5"
+                Width="130"
+                Margin="8,0,0,0"
+                Command="{Binding PasteAndDownloadCommand}"
+                Content="📋 붙여넣고 추출"
+                Style="{StaticResource AccentButtonStyle}"
+                ToolTip="클립보드의 주소를 URL 칸에 붙여넣고 바로 MP3 추출을 시작합니다" />
         </Grid>
 
         <!--  "Sign in to confirm you're not a bot" 오류가 뜰 때만 내보낸 쿠키 파일을 지정한다  -->

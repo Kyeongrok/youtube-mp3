@@ -26,13 +26,7 @@
         shell:WindowChrome.IsHitTestVisibleInChrome="True">
         <Button.ContextMenu>
             <ContextMenu x:Name="Menu">
-                <!--  앱 이름·버전 (클릭 대상이 아니라 표시용)  -->
-                <MenuItem
-                    x:Name="AppInfoHeader"
-                    FontSize="12"
-                    Foreground="#888888"
-                    IsHitTestVisible="False" />
-                <Separator />
+                <!--  앱 이름·버전은 타이틀바(햄버거 버튼 오른쪽)에 표시한다  -->
                 <MenuItem Command="{Binding ShowPlayerCommand}" Header="플레이어" />
                 <MenuItem Command="{Binding ShowExtractionCommand}" Header="Youtube Mp3 추출" />
                 <MenuItem Command="{Binding ShowVolumeCommand}" Header="데시벨 조정" />

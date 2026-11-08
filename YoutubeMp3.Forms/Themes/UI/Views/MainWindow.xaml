@@ -18,8 +18,8 @@
         <!--  재생목록이 20곡은 보이도록 잡은 최소 높이  -->
         <Setter Property="MinHeight" Value="660" />
         <Setter Property="WindowStyle" Value="None" />
-        <!--  앱 이름·버전은 햄버거 메뉴 맨 위에 표시한다  -->
-        <Setter Property="ShowTitleText" Value="False" />
+        <!--  앱 이름·버전(Title = "YoutubeMp3 vX.Y.Z", MainWindow.cs에서 설정)을 타이틀바의 햄버거 버튼 오른쪽에 표시한다  -->
+        <Setter Property="ShowTitleText" Value="True" />
 
         <!--  타이틀바 맨 왼쪽 햄버거 버튼 - 누르면 데시벨 조정·설정 메뉴가 열린다  -->
         <Setter Property="TitleBarLeftContent">

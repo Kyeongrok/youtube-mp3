@@ -280,23 +280,37 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>클립보드의 텍스트(주소)를 URL 칸에 붙여넣는다. 앞뒤 공백·줄바꿈은 걷어 낸다.</summary>
     [RelayCommand]
-    private void PasteUrl()
+    private void PasteUrl() => TryPasteUrl();
+
+    private bool TryPasteUrl()
     {
         try
         {
-            if (!Clipboard.ContainsText())
+            var text = Clipboard.ContainsText() ? Clipboard.GetText().Trim() : string.Empty;
+            if (text.Length == 0)
             {
                 Status = "클립보드에 붙여넣을 주소가 없습니다";
-                return;
+                return false;
             }
 
-            Url = Clipboard.GetText().Trim();
+            Url = text;
+            return true;
         }
         catch (Exception ex)
         {
             // 다른 프로그램이 클립보드를 잡고 있으면 실패할 수 있다.
             Status = $"붙여넣기 실패: {ex.Message}";
+            return false;
         }
+    }
+
+    /// <summary>클립보드 주소를 붙여넣고 곧바로 추출 대기열에 넣는다. 붙여넣을 주소가 없으면 추출하지 않는다.</summary>
+    [RelayCommand]
+    private void PasteAndDownload()
+    {
+        // 붙여넣기에 실패하면 URL 칸에 남아 있던 예전 주소로 추출되지 않게 멈춘다.
+        if (TryPasteUrl() && CanDownload())
+            Download();
     }
 
     // 다운로드 중에도 버튼을 막지 않고 대기열에 쌓아, 처리 중인 항목이 끝나는 대로 이어서 추출한다.

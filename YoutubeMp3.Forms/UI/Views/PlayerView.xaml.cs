@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -16,9 +17,44 @@ public partial class PlayerView : UserControl
     private Point _dragStart;
     private PlaylistItem? _dragItem;
 
+    // 좌/우 방향키 한 번에 앞/뒤로 옮기는 양.
+    private const double ArrowSeekSeconds = 10;
+
+    private Window? _hostWindow;
+
     public PlayerView()
     {
         InitializeComponent();
+
+        // 목록·진행바 어디에 포커스가 있든(또는 없든) 방향키가 먹도록 창 단위로 받는다.
+        // 플레이어 화면이 떠 있는 동안에만 연결해 다른 화면의 방향키를 가로채지 않는다.
+        Loaded += (_, _) =>
+        {
+            _hostWindow = Window.GetWindow(this);
+            if (_hostWindow is not null)
+                _hostWindow.PreviewKeyDown += OnWindowPreviewKeyDown;
+        };
+        Unloaded += (_, _) =>
+        {
+            if (_hostWindow is not null)
+                _hostWindow.PreviewKeyDown -= OnWindowPreviewKeyDown;
+            _hostWindow = null;
+        };
+    }
+
+    // ── 키보드: ← 10초 뒤로, → 10초 앞으로 ─────────────────────────
+
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Left or Key.Right) || !IsVisible || DataContext is not PlayerViewModel viewModel)
+            return;
+
+        // 글자 입력 중이면 커서 이동이 우선이다.
+        if (Keyboard.FocusedElement is TextBoxBase)
+            return;
+
+        viewModel.SeekBy(e.Key == Key.Right ? ArrowSeekSeconds : -ArrowSeekSeconds);
+        e.Handled = true; // 진행바·목록이 방향키를 따로 처리하지 않게 한다.
     }
 
     // ── 드롭: 외부 파일 추가 / 내부 순서 변경 ────────────────────

@@ -337,6 +337,23 @@ public partial class PlayerViewModel : ObservableObject
         }
     }
 
+    /// <summary>지금 위치에서 deltaSeconds만큼 앞뒤로 옮긴다(방향키 ←/→). 곡의 처음과 끝을 넘지 않는다.</summary>
+    public void SeekBy(double deltaSeconds)
+    {
+        if (_current is null || _mediaClosed)
+            return;
+
+        var target = _player.Position.TotalSeconds + deltaSeconds;
+        if (_player.NaturalDuration.HasTimeSpan)
+            target = Math.Min(target, _player.NaturalDuration.TimeSpan.TotalSeconds);
+        target = Math.Max(0, target);
+
+        _player.Position = TimeSpan.FromSeconds(target);
+        _suppressSeek = true;
+        PositionSeconds = target;
+        _suppressSeek = false;
+    }
+
     [RelayCommand]
     private void Stop()
     {

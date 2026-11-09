@@ -122,6 +122,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import android.widget.Toast
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import android.app.Activity
@@ -560,8 +562,24 @@ private fun SearchTab(viewModel: MainViewModel) {
     val searching by viewModel.searching.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val quality by viewModel.quality.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Column(Modifier.padding(horizontal = 16.dp).fillMaxSize()) {
+        // 클립보드의 주소를 넣고 바로 받는다. 받기가 끝나면 DownloadService가 곧바로 재생한다.
+        Button(
+            onClick = {
+                val text = readClipboardText(context)
+                val url = text?.let(MainViewModel::extractUrl)
+                if (url == null) {
+                    Toast.makeText(context, "클립보드에 주소가 없습니다.", Toast.LENGTH_SHORT).show()
+                } else {
+                    input = url
+                    viewModel.download(url, url)
+                    Toast.makeText(context, "받기 시작: 끝나면 바로 재생합니다.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        ) { Text("📋 붙여넣고 받기") }
         OutlinedTextField(
             value = input,
             onValueChange = { input = it },
@@ -604,6 +622,13 @@ private fun SearchTab(viewModel: MainViewModel) {
             }
         }
     }
+}
+
+private fun readClipboardText(context: Context): String? {
+    val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return null
+    val clip = clipboard.primaryClip ?: return null
+    if (clip.itemCount == 0) return null
+    return clip.getItemAt(0).coerceToText(context)?.toString()?.trim()?.takeIf(String::isNotEmpty)
 }
 
 @Composable

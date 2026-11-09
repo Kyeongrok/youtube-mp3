@@ -99,7 +99,7 @@ object Engine {
         outputDirectory: File,
         audioQuality: String,
         processId: String,
-        onProgress: (Float) -> Unit,
+        onProgress: (percent: Float, totalSize: String?) -> Unit,
     ): File {
         ready.await()
         return withContext(Dispatchers.IO) {
@@ -111,12 +111,23 @@ object Engine {
                 .addOption("--embed-metadata")
                 .addOption("-o", File(outputDirectory, "%(title)s.%(ext)s").absolutePath)
 
-            YoutubeDL.getInstance().execute(request, processId, false) { progress, _, _ ->
-                onProgress(progress)
+            // yt-dlp 진행 줄("[download]  45.3% of ~3.21MiB at ...")에서 받을 전체 용량을 꺼낸다.
+            YoutubeDL.getInstance().execute(request, processId, false) { progress, _, line ->
+                onProgress(progress, TOTAL_SIZE.find(line.orEmpty())?.groupValues?.get(1))
             }
             outputDirectory.listFiles { file -> file.extension == "mp3" }?.firstOrNull()
                 ?: error("MP3 파일이 만들어지지 않았습니다.")
         }
+    }
+
+    private val TOTAL_SIZE = Regex("""of\s+~?\s*([\d.]+\s*[KMG]i?B)""")
+
+    /** 바이트 수를 "4.2MB"처럼 읽기 쉽게 바꾼다. */
+    fun formatSize(bytes: Long): String = when {
+        bytes >= 1L shl 30 -> "%.2fGB".format(bytes / (1L shl 30).toDouble())
+        bytes >= 1L shl 20 -> "%.1fMB".format(bytes / (1L shl 20).toDouble())
+        bytes >= 1L shl 10 -> "%.0fKB".format(bytes / (1L shl 10).toDouble())
+        else -> "${bytes}B"
     }
 
     fun cancel(processId: String) {

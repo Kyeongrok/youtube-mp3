@@ -44,14 +44,14 @@
         DragOver="OnDragOver"
         Drop="OnDrop">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!--  재생 중(상단): 재생/일시정지 + 현재 곡 이름 + 시간  -->
-        <Grid Grid.Row="0">
+        <!--  재생 중(재생목록 아래): 재생/일시정지 + 현재 곡 이름 + 시간  -->
+        <Grid Grid.Row="1" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -134,8 +134,8 @@
         <!--  재생 진행바: 클릭/드래그로 해당 위치부터 재생  -->
         <Slider
             x:Name="ProgressSlider"
-            Grid.Row="1"
-            Margin="0,8,0,0"
+            Grid.Row="2"
+            Margin="0,6,0,0"
             VerticalAlignment="Center"
             IsMoveToPointEnabled="True"
             LargeChange="10"
@@ -149,8 +149,7 @@
         <!--  재생목록  -->
         <ListBox
             x:Name="PlaylistBox"
-            Grid.Row="2"
-            Margin="0,4.2,0,0"
+            Grid.Row="0"
             AllowDrop="True"
             Background="#2D2D2D"
             BorderBrush="#3C3C3C"
@@ -279,7 +278,7 @@
 
         <!--  비어 있을 때 안내(드롭 유도)  -->
         <TextBlock
-            Grid.Row="2"
+            Grid.Row="0"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             FontSize="13"

@@ -93,15 +93,19 @@ class DownloadService : Service() {
         val workDirectory = File(cacheDir, "downloads/${item.id}").apply { mkdirs() }
         Downloads.change(item.id) { it.copy(status = DownloadStatus.Running, message = "준비 중...") }
         try {
-            val file = Engine.downloadAudio(item.url, workDirectory, item.quality, item.id) { progress ->
+            var totalSize: String? = null
+            val file = Engine.downloadAudio(item.url, workDirectory, item.quality, item.id) { progress, size ->
+                if (size != null) totalSize = size
                 val percent = progress.coerceIn(0f, 100f)
-                val message = if (percent >= 100f) "MP3로 변환 중..." else "다운로드 중... ${percent.toInt()}%"
+                val sizeText = totalSize?.let { " · 원본 $it" }.orEmpty()
+                val message = if (percent >= 100f) "MP3로 변환 중...$sizeText" else "다운로드 중... ${percent.toInt()}%$sizeText"
                 Downloads.change(item.id) { it.copy(progress = percent / 100f, message = message) }
                 updateNotification(notification(item.title, percent.toInt()))
             }
+            val mp3Size = Engine.formatSize(file.length())
             val uri = Library.save(this, file)
             Downloads.change(item.id) {
-                it.copy(status = DownloadStatus.Done, progress = 1f, title = file.nameWithoutExtension, message = "완료")
+                it.copy(status = DownloadStatus.Done, progress = 1f, title = file.nameWithoutExtension, message = "완료 · MP3 $mp3Size")
             }
             playNow(uri, file.nameWithoutExtension)
         } catch (e: YoutubeDL.CanceledException) {

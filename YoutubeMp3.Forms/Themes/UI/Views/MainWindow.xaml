@@ -28,27 +28,46 @@
             </Setter.Value>
         </Setter>
 
-        <!--  타이틀바 가운데: 어느 화면에서든 한 번에 플레이어로 돌아오는 탭.
+        <!--  타이틀바 가운데: 어느 화면에서든 한 번에 옮겨 가는 탭(유튜브 MP3 추출 / 플레이어).
               나머지 화면 이동은 왼쪽 햄버거 메뉴에, 재생·정지는 플레이어 화면의 곡 제목 줄에 있다.  -->
         <Setter Property="TitleBarContent">
             <Setter.Value>
-                <Button
-                    Width="90"
-                    Height="26"
-                    VerticalAlignment="Center"
-                    Command="{Binding ShowPlayerCommand}"
-                    Content="플레이어"
-                    WindowChrome.IsHitTestVisibleInChrome="True">
-                    <Button.Style>
-                        <Style BasedOn="{StaticResource SecondaryButtonStyle}" TargetType="Button">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsPlayerActive}" Value="True">
-                                    <Setter Property="Background" Value="#0078D4" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
+                <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                    <Button
+                        Width="100"
+                        Height="26"
+                        Command="{Binding ShowExtractionCommand}"
+                        Content="YoutubeMp3"
+                        ToolTip="유튜브 검색·MP3 추출 화면"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource SecondaryButtonStyle}" TargetType="Button">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsExtractionActive}" Value="True">
+                                        <Setter Property="Background" Value="#0078D4" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button
+                        Width="90"
+                        Height="26"
+                        Margin="6,0,0,0"
+                        Command="{Binding ShowPlayerCommand}"
+                        Content="플레이어"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource SecondaryButtonStyle}" TargetType="Button">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsPlayerActive}" Value="True">
+                                        <Setter Property="Background" Value="#0078D4" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
             </Setter.Value>
         </Setter>
 

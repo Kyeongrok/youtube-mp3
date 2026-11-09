@@ -192,8 +192,6 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock
                 Grid.Column="0"
@@ -202,38 +200,28 @@
                 FontSize="13"
                 Foreground="#CCCCCC"
                 Text="URL" />
+            <!--  추출 버튼을 뺐으므로, 직접 입력하거나 검색 결과로 채운 주소는 Enter로 추출한다  -->
             <TextBox
                 Grid.Column="1"
                 Style="{StaticResource DarkTextBoxStyle}"
-                Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}" />
-            <!--  클립보드에 복사해 둔 주소를 URL 칸에 바로 붙여넣는다  -->
-            <Button
-                Grid.Column="2"
-                Width="80"
-                Margin="8,0,0,0"
-                Command="{Binding PasteUrlCommand}"
-                Content="📋 붙여넣기"
-                Style="{StaticResource SecondaryButtonStyle}"
-                ToolTip="클립보드의 주소를 URL 칸에 붙여넣습니다" />
+                Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}"
+                ToolTip="Enter를 누르면 이 주소로 MP3 추출을 시작합니다">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Return" Command="{Binding DownloadCommand}" />
+                </TextBox.InputBindings>
+            </TextBox>
             <!--  MP3 추출 음질(비트레이트)  -->
             <ComboBox
-                Grid.Column="3"
+                Grid.Column="2"
                 Width="80"
                 Margin="8,0,0,0"
                 ItemsSource="{Binding AudioQualityOptions}"
                 SelectedItem="{Binding SelectedAudioQuality, Mode=TwoWay}"
                 Style="{StaticResource DarkComboBoxStyle}"
                 ToolTip="MP3 추출 음질" />
-            <Button
-                Grid.Column="4"
-                Width="100"
-                Margin="8,0,0,0"
-                Command="{Binding DownloadCommand}"
-                Content="MP3 추출"
-                Style="{StaticResource AccentButtonStyle}" />
             <!--  클립보드 주소를 붙여넣고 곧바로 추출까지 한 번에  -->
             <Button
-                Grid.Column="5"
+                Grid.Column="3"
                 Width="130"
                 Margin="8,0,0,0"
                 Command="{Binding PasteAndDownloadCommand}"
@@ -273,18 +261,10 @@
             Grid.Row="5"
             Margin="0,12,0,0"
             Orientation="Horizontal">
-            <Button
-                Width="140"
-                Height="40"
-                Command="{Binding AddToPlaylistCommand}"
-                Content="재생목록에 추가"
-                FontSize="14"
-                Style="{StaticResource AccentButtonStyle}" />
-
+            <!--  추출이 끝나면 자동으로 재생목록에 들어가 재생되므로 '재생목록에 추가' 버튼은 두지 않는다  -->
             <Button
                 Width="120"
                 Height="40"
-                Margin="8,0,0,0"
                 Command="{Binding OpenFolderCommand}"
                 Content="폴더 열기"
                 FontSize="14"

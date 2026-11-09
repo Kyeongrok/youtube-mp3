@@ -279,9 +279,6 @@ public partial class MainWindowViewModel : ObservableObject
     private bool CanDownload() => !string.IsNullOrWhiteSpace(Url);
 
     /// <summary>클립보드의 텍스트(주소)를 URL 칸에 붙여넣는다. 앞뒤 공백·줄바꿈은 걷어 낸다.</summary>
-    [RelayCommand]
-    private void PasteUrl() => TryPasteUrl();
-
     private bool TryPasteUrl()
     {
         try
@@ -385,20 +382,6 @@ public partial class MainWindowViewModel : ObservableObject
         {
             UseShellExecute = true,
         });
-    }
-
-    private bool CanAddToPlaylist() => !string.IsNullOrEmpty(LastDownloadedFilePath);
-
-    /// <summary>방금 추출한 mp3를 플레이어의 재생목록에 추가하고 플레이어 화면으로 이동한다.</summary>
-    [RelayCommand(CanExecute = nameof(CanAddToPlaylist))]
-    private void AddToPlaylist()
-    {
-        if (string.IsNullOrEmpty(LastDownloadedFilePath))
-            return;
-
-        _playerViewModel.AddFiles(new[] { LastDownloadedFilePath });
-        Status = $"재생목록에 추가: {Path.GetFileName(LastDownloadedFilePath)}";
-        ShowPlayer();
     }
 
     // ── MP3 볼륨(dB) 조절 ────────────────────────────────────────
@@ -555,9 +538,5 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnUrlChanged(string value) => DownloadCommand.NotifyCanExecuteChanged();
 
-    partial void OnLastDownloadedFilePathChanged(string? value)
-    {
-        OpenFolderCommand.NotifyCanExecuteChanged();
-        AddToPlaylistCommand.NotifyCanExecuteChanged();
-    }
+    partial void OnLastDownloadedFilePathChanged(string? value) => OpenFolderCommand.NotifyCanExecuteChanged();
 }

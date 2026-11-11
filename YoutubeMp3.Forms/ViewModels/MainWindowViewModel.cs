@@ -350,8 +350,9 @@ public partial class MainWindowViewModel : ObservableObject
                     ProgressPercentage = 100;
                     Status = $"완료: {Path.GetFileName(filePath)}";
                     LastDownloadedFilePath = filePath;
-                    // 추출이 끝나면 재생목록에 넣고 바로 재생한다.
+                    // 추출이 끝나면 재생목록에 넣고 바로 재생하며, 플레이어 화면으로 넘어간다.
                     _playerViewModel.AddAndPlay(filePath);
+                    ShowPlayer();
                 }
                 catch (Exception ex)
                 {

@@ -61,9 +61,11 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <!--  곡 제목 왼쪽의 작은 재생/일시정지 토글  -->
+            <!--  곡 제목 왼쪽의 재생/일시정지 토글. 가장 자주 누르므로 다른 버튼의 2배 크기  -->
             <Button
                 Grid.Column="0"
+                Width="40"
+                FontSize="24"
                 Command="{Binding PlayPauseCommand}"
                 ToolTip="재생 / 일시정지">
                 <Button.Style>

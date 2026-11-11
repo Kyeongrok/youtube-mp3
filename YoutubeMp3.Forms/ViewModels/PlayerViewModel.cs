@@ -297,7 +297,7 @@ public partial class PlayerViewModel : ObservableObject
             _suppressSeek = false;
             _player.Play();
             IsPlaying = true;
-            Status = $"재생 중 · {item.Name}";
+            Status = "재생 중";
         }
         catch (Exception ex)
         {
@@ -327,13 +327,13 @@ public partial class PlayerViewModel : ObservableObject
         {
             _player.Pause();
             IsPlaying = false;
-            Status = $"일시정지 · {_current.Name}";
+            Status = "일시정지";
         }
         else
         {
             _player.Play();
             IsPlaying = true;
-            Status = $"재생 중 · {_current.Name}";
+            Status = "재생 중";
         }
     }
 
@@ -363,7 +363,7 @@ public partial class PlayerViewModel : ObservableObject
         PositionSeconds = 0;
         _suppressSeek = false;
         if (_current is not null)
-            Status = $"정지 · {_current.Name}";
+            Status = "정지";
     }
 
     // 수동 '다음'은 셔플 모드에서는 무작위로, 그 외에는 목록 순서대로 넘어간다(끝이면 처음으로).
@@ -647,7 +647,7 @@ public partial class PlayerViewModel : ObservableObject
         PositionSeconds = 0;
         DurationSeconds = 0;
         _suppressSeek = false;
-        Status = $"재생 중지 · {_current.Name}";
+        Status = "재생 중지";
     }
 
     /// <summary>볼륨 조절처럼 원본을 새 파일로 대체했을 때, 재생목록 항목을 새 경로로 갈아끼운다.

@@ -80,6 +80,12 @@
             ItemsSource="{Binding SearchResults}"
             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
             SelectedItem="{Binding SelectedSearchResult, Mode=TwoWay}">
+            <!--  항목을 우클릭하면 선택되고(Url이 채워지고) 바로 추출할 수 있다  -->
+            <ListBox.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Command="{Binding PlacementTarget.DataContext.DownloadCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="다운로드" />
+                </ContextMenu>
+            </ListBox.ContextMenu>
             <!--  검색 결과가 없으면 리스트를 숨긴다  -->
             <ListBox.Style>
                 <Style TargetType="ListBox">
@@ -192,6 +198,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock
                 Grid.Column="0"
@@ -219,15 +226,44 @@
                 SelectedItem="{Binding SelectedAudioQuality, Mode=TwoWay}"
                 Style="{StaticResource DarkComboBoxStyle}"
                 ToolTip="MP3 추출 음질" />
-            <!--  클립보드 주소를 붙여넣고 곧바로 추출까지 한 번에  -->
+            <!--  검색 결과가 있을 때만: 선택한 결과(URL 칸 주소)를 추출  -->
             <Button
                 Grid.Column="3"
+                Width="100"
+                Margin="8,0,0,0"
+                Command="{Binding DownloadCommand}"
+                Content="⬇ 다운로드"
+                ToolTip="선택한 검색 결과를 MP3로 추출합니다">
+                <Button.Style>
+                    <Style BasedOn="{StaticResource AccentButtonStyle}" TargetType="Button">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasItems, ElementName=ResultsList}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <!--  클립보드에 유튜브 주소가 있을 때만: 붙여넣고 곧바로 추출까지 한 번에  -->
+            <Button
+                Grid.Column="4"
                 Width="130"
                 Margin="8,0,0,0"
                 Command="{Binding PasteAndDownloadCommand}"
                 Content="📋 붙여넣고 추출"
-                Style="{StaticResource AccentButtonStyle}"
-                ToolTip="클립보드의 주소를 URL 칸에 붙여넣고 바로 MP3 추출을 시작합니다" />
+                ToolTip="클립보드의 주소를 URL 칸에 붙여넣고 바로 MP3 추출을 시작합니다">
+                <Button.Style>
+                    <Style BasedOn="{StaticResource AccentButtonStyle}" TargetType="Button">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsClipboardYoutubeUrl}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
         </Grid>
 
         <!--  "Sign in to confirm you're not a bot" 오류가 뜰 때만 내보낸 쿠키 파일을 지정한다  -->

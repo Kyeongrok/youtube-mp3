@@ -301,6 +301,30 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    // 클립보드에 유튜브 주소가 있을 때만 "붙여넣고 추출" 버튼을 보여 준다.
+    [ObservableProperty]
+    private bool _isClipboardYoutubeUrl;
+
+    private static readonly System.Text.RegularExpressions.Regex YoutubeUrlPattern = new(
+        @"^(https?://)?((www|m|music)\.)?(youtube\.com/(watch\?|shorts/|live/|embed/|playlist\?)|youtu\.be/)\S+$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    public static bool IsYoutubeUrl(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && YoutubeUrlPattern.IsMatch(text.Trim());
+
+    /// <summary>클립보드가 바뀌거나 추출 화면이 열릴 때 불려, 붙여넣기 버튼 표시 여부를 갱신한다.</summary>
+    public void RefreshClipboardUrl()
+    {
+        try
+        {
+            IsClipboardYoutubeUrl = Clipboard.ContainsText() && IsYoutubeUrl(Clipboard.GetText());
+        }
+        catch
+        {
+            // 다른 프로그램이 클립보드를 잡고 있으면 읽기에 실패한다. 다음 변경 때 다시 확인한다.
+        }
+    }
+
     /// <summary>클립보드 주소를 붙여넣고 곧바로 추출 대기열에 넣는다. 붙여넣을 주소가 없으면 추출하지 않는다.</summary>
     [RelayCommand]
     private void PasteAndDownload()

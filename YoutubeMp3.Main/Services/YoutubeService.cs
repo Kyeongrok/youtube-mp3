@@ -86,6 +86,11 @@ public sealed class YoutubeService : IYoutubeService
         if (!string.IsNullOrEmpty(audioQuality))
             options.AddCustomOption("--audio-quality", audioQuality);
 
+        // 곡마다 음량이 제각각이라 작은 곡을 따로 키워야 했다. mp3로 변환하는 FFmpeg 단계에 loudnorm을 걸어
+        // 모든 곡을 스트리밍 서비스 기준(-14 LUFS)으로 맞춘다. 변환과 한 번에 처리되므로 재인코딩이 늘지 않는다.
+        // loudnorm은 내부적으로 192kHz로 올려 내보내므로 mp3가 받는 44.1kHz로 다시 지정한다.
+        options.AddCustomOption("--postprocessor-args", "ExtractAudio+ffmpeg_o:-af loudnorm=I=-14:TP=-1.5:LRA=11 -ar 44100");
+
         var startedAt = DateTime.Now.AddSeconds(-5);
         var result = await _youtubeDl.RunAudioDownload(
             url, AudioConversionFormat.Mp3, ct, ytProgress, overrideOptions: options);

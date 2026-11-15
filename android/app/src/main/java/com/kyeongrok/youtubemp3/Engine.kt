@@ -108,6 +108,9 @@ object Engine {
                 .addOption("--extract-audio")
                 .addOption("--audio-format", "mp3")
                 .addOption("--audio-quality", audioQuality)
+                // PC판과 같이 mp3로 바꾸는 FFmpeg 단계에서 음량을 -14 LUFS로 맞춘다. 변환과 한 번에 처리돼 재인코딩이 늘지 않는다.
+                // loudnorm은 192kHz로 올려 내보내므로 mp3가 받는 44.1kHz로 다시 지정한다.
+                .addOption("--postprocessor-args", "ExtractAudio+ffmpeg_o:-af loudnorm=I=-14:TP=-1.5:LRA=11 -ar 44100")
                 .addOption("--embed-metadata")
                 .addOption("-o", File(outputDirectory, "%(title)s.%(ext)s").absolutePath)
 

@@ -153,6 +153,20 @@ object Player {
         if (index in queue.indices) playFrom(index)
     }
 
+    /**
+     * 지금 재생 중 목록의 순서를 바꾼다. 나오고 있는 곡은 끊지 않고, 그 곡이 옮겨 간 자리를 따라가
+     * 다음·이전 곡이 새 순서대로 이어지게 한다.
+     */
+    fun reorderQueue(ordered: List<Track>) {
+        if (ordered.size != queue.size) return
+        val currentId = state.value.track?.id
+        queue = ordered
+        val index = ordered.indexOfFirst { it.id == currentId }.takeIf { it >= 0 } ?: state.value.queueIndex
+        mutableState.value = mutableState.value.copy(queue = ordered, queueIndex = index)
+        // 끝나면 다음 곡을 고르는 콜백은 옛 자리를 기억하므로 새 자리로 다시 건다.
+        mediaPlayer?.setOnCompletionListener { onCompleted(index) }
+    }
+
     fun previous() {
         if (queue.isEmpty()) return
         playFrom((state.value.queueIndex - 1 + queue.size) % queue.size)

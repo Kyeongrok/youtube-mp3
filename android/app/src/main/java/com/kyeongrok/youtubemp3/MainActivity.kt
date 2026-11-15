@@ -103,6 +103,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -847,13 +849,61 @@ private fun recordingInfo(track: Track): String {
     return "$date · $length"
 }
 
-/** 재생 중인 곡과 그 뒤로 나올 곡들. 하단 재생바의 제목을 누르면 열린다. */
+/** 재생 중인 곡과 그 뒤로 나올 곡들. 하단 재생바의 제목을 누르면 열린다. 왼쪽 손잡이를 끌면 순서가 바뀐다. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NowPlayingSheet(onDismiss: () -> Unit) {
     val state by Player.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = state.queueIndex)
     val colors = MaterialTheme.colorScheme
+
+    // 재생목록 화면과 같은 방식: 끄는 동안에는 화면 순서만 바꾸고, 손을 떼면 플레이어에 넘긴다.
+    var order by remember { mutableStateOf(state.queue) }
+    var draggedId by remember { mutableStateOf<Long?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    LaunchedEffect(state.queue) { if (draggedId == null) order = state.queue }
+    val currentId = state.track?.id
+    // 같은 곡이 두 번 들어 있으면 키가 겹쳐 목록이 깨지므로, 그때는 끌기를 끈다.
+    val canReorder = order.size > 1 && order.distinctBy { it.id }.size == order.size
+
+    fun dragBy(delta: Float) {
+        val id = draggedId ?: return
+        val info = listState.layoutInfo
+        val current = info.visibleItemsInfo.firstOrNull { it.key == id } ?: return
+        dragOffset += delta
+        // 목록 끝에 닿으면 그쪽으로 굴린다. 곡이 따라 움직이므로 그만큼 되돌려 손가락 밑에 둔다.
+        val top = current.offset + dragOffset
+        val bottom = top + current.size
+        val edge = current.size / 2f
+        val scroll = when {
+            delta < 0 && top < info.viewportStartOffset + edge -> delta
+            delta > 0 && bottom > info.viewportEndOffset - edge -> delta
+            else -> 0f
+        }
+        if (scroll != 0f) dragOffset += listState.dispatchRawDelta(scroll)
+        // 끄는 곡의 가운데가 다른 곡 위로 넘어가면 자리를 바꾼다.
+        val center = current.offset + dragOffset + current.size / 2f
+        val target = info.visibleItemsInfo.firstOrNull {
+            it.key != id && center >= it.offset && center < it.offset + it.size
+        } ?: return
+        val from = order.indexOfFirst { it.id == id }
+        val to = order.indexOfFirst { it.id == target.key }
+        if (from < 0 || to < 0) return
+        order = order.toMutableList().apply { add(to, removeAt(from)) }
+        dragOffset += current.offset - target.offset
+    }
+
+    fun endDrag() {
+        if (draggedId != null && order.map { it.id } != Player.state.value.queue.map { it.id }) {
+            Player.reorderQueue(order)
+        }
+        draggedId = null
+        dragOffset = 0f
+    }
+
+    // 끄는 제스처는 곡마다 한 번 만들어져 계속 살아 있으므로, 늘 최신 함수를 부르게 한다.
+    val latestDragBy by rememberUpdatedState<(Float) -> Unit> { dragBy(it) }
+    val latestEndDrag by rememberUpdatedState<() -> Unit> { endDrag() }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Row(
@@ -870,20 +920,55 @@ private fun NowPlayingSheet(onDismiss: () -> Unit) {
                 Text("${state.queueIndex + 1} / ${state.queueSize}", color = colors.onSurfaceVariant)
             }
         }
-        if (state.queue.isEmpty()) {
+        if (order.isEmpty()) {
             Text("재생 중인 곡이 없습니다.", Modifier.padding(16.dp))
         }
         LazyColumn(state = listState, contentPadding = ListPadding) {
-            itemsIndexed(state.queue) { index, track ->
-                val current = index == state.queueIndex
+            itemsIndexed(order, key = { index, track -> if (canReorder) track.id else index }) { index, track ->
+                val current = track.id == currentId
+                val dragging = track.id == draggedId
                 Row(
-                    Modifier
+                    (
+                        if (dragging) {
+                            Modifier
+                                .zIndex(1f)
+                                .graphicsLayer { translationY = dragOffset }
+                                .shadow(6.dp)
+                        } else {
+                            Modifier.animateItem()
+                        }
+                    )
                         .fillMaxWidth()
                         .background(if (current) colors.primaryContainer else colors.surfaceContainerLow)
                         .clickable { if (!current) Player.playAt(index) }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .padding(end = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (canReorder) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = "끌어서 순서 바꾸기",
+                            modifier = Modifier
+                                .pointerInput(track.id) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            draggedId = track.id
+                                            dragOffset = 0f
+                                        },
+                                        onDragEnd = { latestEndDrag() },
+                                        onDragCancel = { latestEndDrag() },
+                                        onDrag = { change, amount ->
+                                            change.consume()
+                                            latestDragBy(amount.y)
+                                        },
+                                    )
+                                }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            tint = colors.onSurfaceVariant,
+                        )
+                    } else {
+                        Box(Modifier.width(16.dp))
+                    }
                     Box(Modifier.width(32.dp)) {
                         if (current) {
                             Icon(
@@ -897,7 +982,7 @@ private fun NowPlayingSheet(onDismiss: () -> Unit) {
                     }
                     Text(
                         track.title,
-                        Modifier.weight(1f),
+                        Modifier.weight(1f).padding(vertical = 14.dp),
                         color = if (current) colors.onPrimaryContainer else colors.onSurface,
                         fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 2,

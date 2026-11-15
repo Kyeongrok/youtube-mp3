@@ -19,9 +19,11 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type units:YoutubeMp3Window}">
                     <Border
+                        x:Name="WindowBorder"
                         Background="#1E1E1E"
                         BorderBrush="#3C3C3C"
-                        BorderThickness="1">
+                        BorderThickness="1"
+                        CornerRadius="3">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="36" />
@@ -29,7 +31,13 @@
                             </Grid.RowDefinitions>
 
                             <!--  Title Bar  -->
-                            <Grid Grid.Row="0" Background="#2D2D2D">
+                            <!--  바깥 테두리(1px) 안쪽이라 위 모서리는 2로 깎아야 둥근 테두리와 맞는다  -->
+                            <Border
+                                x:Name="TitleBarBackground"
+                                Grid.Row="0"
+                                Background="#2D2D2D"
+                                CornerRadius="2,2,0,0" />
+                            <Grid Grid.Row="0">
                                 <!--  맨 왼쪽: 앱별 콘텐츠(설정 버튼 등) + 제목  -->
                                 <StackPanel
                                     HorizontalAlignment="Left"
@@ -74,6 +82,13 @@
                             <ContentPresenter Grid.Row="1" />
                         </Grid>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <!--  최대화하면 화면 가장자리에 붙으므로 모서리를 각지게  -->
+                        <Trigger Property="WindowState" Value="Maximized">
+                            <Setter TargetName="WindowBorder" Property="CornerRadius" Value="0" />
+                            <Setter TargetName="TitleBarBackground" Property="CornerRadius" Value="0" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

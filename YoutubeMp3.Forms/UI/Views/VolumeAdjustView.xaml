@@ -1,7 +1,8 @@
 <UserControl
     x:Class="YoutubeMp3.Forms.UI.Views.VolumeAdjustView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:units="clr-namespace:YoutubeMp3.Support.UI.Units;assembly=YoutubeMp3.Support">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -29,7 +30,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="56" />
+                <ColumnDefinition Width="72" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -60,11 +61,17 @@
                 Foreground="#CCCCCC"
                 Text="dB" />
 
-            <TextBox
+            <!--  0.5 dB 단위로 오르내림. 0 dB는 바꿀 게 없으니 0.5부터  -->
+            <units:NumericSpinner
                 Grid.Column="3"
-                Style="{StaticResource DarkTextBoxStyle}"
-                Text="{Binding VolumeDb, UpdateSourceTrigger=PropertyChanged, StringFormat=0.#}"
-                ToolTip="증가/감소할 데시벨 양 (기본 3)" />
+                Height="36"
+                HorizontalAlignment="Stretch"
+                DecimalPlaces="1"
+                Maximum="30"
+                Minimum="0.5"
+                Step="0.5"
+                ToolTip="증가/감소할 데시벨 양 (기본 3)"
+                Value="{Binding VolumeDb}" />
 
             <Button
                 Grid.Column="4"

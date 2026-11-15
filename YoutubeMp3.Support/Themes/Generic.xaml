@@ -4,5 +4,6 @@
         <ResourceDictionary Source="/YoutubeMp3.Support;component/Themes/Units/MinimizeButton.xaml" />
         <ResourceDictionary Source="/YoutubeMp3.Support;component/Themes/Units/MaximizeButton.xaml" />
         <ResourceDictionary Source="/YoutubeMp3.Support;component/Themes/Units/CloseButton.xaml" />
+        <ResourceDictionary Source="/YoutubeMp3.Support;component/Themes/Units/NumericSpinner.xaml" />
     </ResourceDictionary.MergedDictionaries>
 </ResourceDictionary>

@@ -287,12 +287,55 @@
         </TextBlock>
 
         <!--  재생·정지·이전·다음·반복은 모두 곡 제목 줄로 올렸다  -->
-        <TextBlock
-            Grid.Row="3"
-            Margin="0,8,0,0"
-            FontSize="12"
-            Foreground="#CCCCCC"
-            Text="{Binding Status}"
-            TextWrapping="Wrap" />
+        <Grid Grid.Row="3" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock
+                    FontSize="12"
+                    Foreground="#CCCCCC"
+                    Text="{Binding Status}"
+                    TextWrapping="Wrap" />
+                <!--  플레이어에서 추출을 시작했을 때 진행 상황(추출 화면의 상태 문구)을 함께 보여 준다  -->
+                <TextBlock
+                    FontSize="12"
+                    Foreground="#4CC2FF"
+                    Text="{Binding DataContext.Status, RelativeSource={RelativeSource AncestorType=Window}}"
+                    TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.IsDownloading, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+            <!--  클립보드에 유튜브 주소가 있을 때만: 붙여넣고 곧바로 추출(끝나면 재생목록에 추가되어 재생된다)  -->
+            <Button
+                Grid.Column="1"
+                Width="130"
+                Margin="8,0,0,0"
+                VerticalAlignment="Center"
+                Command="{Binding DataContext.PasteAndDownloadCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                Content="📋 붙여넣고 추출"
+                ToolTip="클립보드의 유튜브 주소를 바로 MP3로 추출합니다. 끝나면 재생목록에 추가되어 재생됩니다">
+                <Button.Style>
+                    <Style BasedOn="{StaticResource AccentButtonStyle}" TargetType="Button">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.IsClipboardYoutubeUrl, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
     </Grid>
 </UserControl>

@@ -1,5 +1,7 @@
-﻿using System.Windows;
+﻿using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using YoutubeMp3.Forms.ViewModels;
 using YoutubeMp3.Support.UI.Units;
 
@@ -12,6 +14,8 @@ public class MainWindow : YoutubeMp3Window
         DefaultStyleKeyProperty.OverrideMetadata(typeof(MainWindow),
             new FrameworkPropertyMetadata(typeof(MainWindow)));
     }
+
+    private const int WmClipboardUpdate = 0x031D;
 
     private readonly AppSettings _settings;
 
@@ -54,7 +58,27 @@ public class MainWindow : YoutubeMp3Window
 
         // 시작하자마자 FFmpeg 등 필수 파일을 백그라운드에서 준비한다(없으면 앱을 못 쓰므로).
         Loaded += async (_, _) => await viewModel.InitializeAsync();
+
+        // 클립보드가 바뀔 때마다 "붙여넣고 추출" 버튼(추출·플레이어 화면) 표시 여부를 갱신한다.
+        SourceInitialized += (_, _) =>
+        {
+            viewModel.RefreshClipboardUrl();
+            if (PresentationSource.FromVisual(this) is not HwndSource source)
+                return;
+
+            source.AddHook((IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+            {
+                if (msg == WmClipboardUpdate)
+                    viewModel.RefreshClipboardUrl();
+                return IntPtr.Zero;
+            });
+            AddClipboardFormatListener(source.Handle);
+        };
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AddClipboardFormatListener(IntPtr hwnd);
 
     // 플레이어 화면에서 보장할 최소 높이(설정 창에서 조절, 기본 800). 이미 이보다 크면 그대로 두고,
     // 다른 화면으로 돌아가도 되돌리지 않는다(왔다 갔다 해도 더는 안 커진다).

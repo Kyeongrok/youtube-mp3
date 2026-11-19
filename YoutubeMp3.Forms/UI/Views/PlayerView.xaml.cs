@@ -120,9 +120,27 @@ public partial class PlayerView : UserControl
         if (DataContext is not PlayerViewModel viewModel)
             return;
 
+        // 이미 여러 곡을 골라 둔 상태에서 그중 하나를 우클릭하면 선택을 그대로 둬 메뉴가 전체에 적용되게 한다.
         var item = ItemFromElement(e.OriginalSource as DependencyObject);
-        if (item is not null)
+        if (item is not null && !PlaylistBox.SelectedItems.Contains(item))
             viewModel.SelectedItem = item;
+    }
+
+    // ListBox.SelectedItems는 바인딩이 안 되므로 바뀔 때마다 VM에 넘긴다.
+    private void OnListSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is PlayerViewModel viewModel)
+            viewModel.SetSelection(PlaylistBox.SelectedItems.OfType<PlaylistItem>());
+    }
+
+    // Delete 키: 선택한 곡(들)을 재생목록에서 뺀다(파일은 지우지 않는다).
+    private void OnListKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Delete || DataContext is not PlayerViewModel viewModel)
+            return;
+
+        viewModel.RemoveSelectedCommand.Execute(null);
+        e.Handled = true;
     }
 
     private void OnItemDoubleClick(object sender, MouseButtonEventArgs e)

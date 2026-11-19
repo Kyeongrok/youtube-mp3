@@ -144,12 +144,16 @@
             BorderBrush="#3C3C3C"
             BorderThickness="1"
             ItemsSource="{Binding Playlist}"
+            KeyDown="OnListKeyDown"
             MouseDoubleClick="OnItemDoubleClick"
             PreviewMouseLeftButtonDown="OnListPreviewMouseLeftButtonDown"
             PreviewMouseMove="OnListPreviewMouseMove"
             PreviewMouseRightButtonDown="OnListPreviewMouseRightButtonDown"
             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-            SelectedItem="{Binding SelectedItem, Mode=TwoWay}">
+            SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+            SelectionChanged="OnListSelectionChanged"
+            SelectionMode="Extended">
+            <!--  Ctrl/Shift+클릭으로 여러 곡을 골라 제거·파일 삭제를 한 번에 할 수 있다(Delete 키 = 재생목록에서 제거)  -->
             <!--  우클릭한 곡을 대상으로 메뉴를 실행한다(코드비하인드에서 먼저 선택 처리)  -->
             <ListBox.ContextMenu>
                 <ContextMenu>
@@ -158,7 +162,7 @@
                     <MenuItem Command="{Binding PlacementTarget.DataContext.RenameSelectedFileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="파일명 변경" />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.SendSelectedToPhoneCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="휴대폰 전송" />
                     <MenuItem Command="{Binding PlacementTarget.DataContext.OpenSelectedFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="파일 위치 열기" />
-                    <MenuItem Command="{Binding PlacementTarget.DataContext.RemoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="재생목록에서 제거" />
+                    <MenuItem Command="{Binding PlacementTarget.DataContext.RemoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Header="재생목록에서 제거" InputGestureText="Delete" />
                     <Separator />
                     <!--  반복 모드: 목록에서 바로 고를 수 있게. 현재 모드에 체크 표시  -->
                     <MenuItem Header="반복 모드">

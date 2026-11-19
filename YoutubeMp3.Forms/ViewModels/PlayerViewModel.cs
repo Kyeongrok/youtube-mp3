@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -448,45 +448,72 @@ public partial class PlayerViewModel : ObservableObject
         PlayItem(candidate);
     }
 
+    // 목록에서 Ctrl/Shift+클릭으로 고른 곡들. ListBox.SelectedItems는 바인딩이 안 돼 뷰가 SetSelection으로 넘겨 준다.
+    private IReadOnlyList<PlaylistItem> _selectedItems = Array.Empty<PlaylistItem>();
+
+    /// <summary>뷰의 목록 선택이 바뀔 때 불린다. 제거·파일 삭제는 이 곡들 전체에 적용된다.</summary>
+    public void SetSelection(IEnumerable<PlaylistItem> items) => _selectedItems = items.ToList();
+
+    // 여러 곡을 골랐으면 그 곡들, 아니면 SelectedItem 하나. 목록 순서대로 돌려준다.
+    private List<PlaylistItem> SelectionTargets()
+    {
+        var targets = Playlist.Where(_selectedItems.Contains).ToList();
+        if (targets.Count == 0 && SelectedItem is not null)
+            targets.Add(SelectedItem);
+        return targets;
+    }
+
     [RelayCommand]
     private void RemoveSelected()
     {
-        if (SelectedItem is null)
+        var targets = SelectionTargets();
+        if (targets.Count == 0)
             return;
 
-        RemoveFromPlaylist(SelectedItem, "삭제됨");
+        RemoveFromPlaylist(targets, targets.Count == 1 ? "삭제됨" : $"{targets.Count}곡 삭제됨");
     }
 
-    /// <summary>선택한 곡을 재생목록에서 빼는 것뿐 아니라 디스크의 실제 파일도 지운다. 되돌릴 수 없어 먼저 확인을 받는다.</summary>
+    /// <summary>선택한 곡들을 재생목록에서 빼는 것뿐 아니라 디스크의 실제 파일도 지운다. 되돌릴 수 없어 먼저 확인을 받는다.</summary>
     [RelayCommand]
     private async Task DeleteSelectedFileAsync()
     {
-        if (SelectedItem is null)
+        var targets = SelectionTargets();
+        if (targets.Count == 0)
             return;
 
-        var item = SelectedItem;
+        var question = targets.Count == 1
+            ? $"'{targets[0].Name}' 파일을 디스크에서 완전히 삭제할까요?"
+            : $"선택한 {targets.Count}개 파일을 디스크에서 완전히 삭제할까요?";
         var confirmed = MessageBox.Show(
-            $"'{item.Name}' 파일을 디스크에서 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다.",
+            $"{question}\n이 작업은 되돌릴 수 없습니다.",
             "파일 삭제",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning) == MessageBoxResult.Yes;
         if (!confirmed)
             return;
 
-        try
+        var deleted = new List<PlaylistItem>();
+        string? error = null;
+        foreach (var item in targets)
         {
-            // 재생 중인 곡이면 핸들을 잡고 있어 삭제가 실패한다. 먼저 재생을 끊는다.
-            ReleaseFile(item.Path);
-            if (File.Exists(item.Path))
-                await FileOperations.DeleteAsync(item.Path);
-        }
-        catch (Exception ex)
-        {
-            Status = $"파일 삭제 실패: {ex.Message}";
-            return;
+            try
+            {
+                // 재생 중인 곡이면 핸들을 잡고 있어 삭제가 실패한다. 먼저 재생을 끊는다.
+                ReleaseFile(item.Path);
+                if (File.Exists(item.Path))
+                    await FileOperations.DeleteAsync(item.Path);
+                deleted.Add(item);
+            }
+            catch (Exception ex)
+            {
+                error = $"파일 삭제 실패 ({item.Name}): {ex.Message}";
+            }
         }
 
-        RemoveFromPlaylist(item, "파일 삭제됨");
+        if (deleted.Count > 0)
+            RemoveFromPlaylist(deleted, deleted.Count == 1 ? "파일 삭제됨" : $"{deleted.Count}개 파일 삭제됨");
+        if (error is not null)
+            Status = error;
     }
 
     /// <summary>선택한 곡의 실제 파일명을 바꾼다(확장자는 유지).</summary>
@@ -617,17 +644,24 @@ public partial class PlayerViewModel : ObservableObject
     }
 
     // 재생목록에서 제거하는 공통 처리(현재 곡이면 정지 + 강조 해제 + 저장 + 상태 표시).
-    private void RemoveFromPlaylist(PlaylistItem item, string statusVerb)
+    private void RemoveFromPlaylist(PlaylistItem item, string statusVerb) =>
+        RemoveFromPlaylist(new[] { item }, statusVerb);
+
+    private void RemoveFromPlaylist(IReadOnlyCollection<PlaylistItem> items, string statusVerb)
     {
-        if (ReferenceEquals(item, _current))
+        foreach (var item in items)
         {
-            _player.Stop();
-            IsPlaying = false;
-            _current = null;
-            CurrentName = "재생 중인 곡이 없습니다";
+            if (ReferenceEquals(item, _current))
+            {
+                _player.Stop();
+                IsPlaying = false;
+                _current = null;
+                CurrentName = "재생 중인 곡이 없습니다";
+            }
+
+            Playlist.Remove(item);
         }
 
-        Playlist.Remove(item);
         SavePlaylist();
         Status = $"{statusVerb} · 총 {Playlist.Count}곡";
     }
